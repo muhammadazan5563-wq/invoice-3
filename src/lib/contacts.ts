@@ -12,6 +12,7 @@ import {
   limit,
   query,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -274,4 +275,37 @@ export async function createContact(
   );
 
   return { contact: { id: uid, ...record }, password };
+}
+
+/** Update profile fields for an existing contact without changing its login. */
+export async function updateContact(
+  contact: Contact,
+  draft: ContactDraft,
+  files: ContactFiles = {}
+): Promise<Contact> {
+  const fullName = (draft.fullName || '').trim();
+  if (!fullName) throw new Error('Full name is required.');
+
+  const [cnicFrontUrl, cnicBackUrl, chequeUrl] = await Promise.all([
+    files.cnicFront ? uploadContactFile(contact.id, 'cnic-front', files.cnicFront) : Promise.resolve(contact.cnicFrontUrl),
+    files.cnicBack ? uploadContactFile(contact.id, 'cnic-back', files.cnicBack) : Promise.resolve(contact.cnicBackUrl),
+    files.cheque ? uploadContactFile(contact.id, 'cheque', files.cheque) : Promise.resolve(contact.chequeUrl),
+  ]);
+  const record = {
+    type: draft.type,
+    fullName,
+    phone: (draft.phone || '').trim(),
+    email: contact.email,
+    companyName: (draft.companyName || '').trim(),
+    location: (draft.location || '').trim(),
+    address: (draft.address || '').trim(),
+    area: (draft.area || '').trim(),
+    cnicFrontUrl,
+    cnicBackUrl,
+    chequeUrl,
+    tempPassword: contact.tempPassword,
+    createdAt: contact.createdAt,
+  };
+  await withFirebaseTimeout(updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), record), 'Updating the contact');
+  return { id: contact.id, ...record };
 }
