@@ -1,0 +1,8 @@
+{
+  "name": "Remix: SheetInvoice React",
+  "description": "A unified invoice ledger supporting both Google Sheets and Supabase Database backends, optimized for serverless hosting on Vercel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
