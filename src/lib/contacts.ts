@@ -67,6 +67,8 @@ export interface CreateContactResult {
 const CONTACTS_COLLECTION = 'contacts';
 const PROVISIONER_APP_NAME = 'contact-provisioner';
 const FIREBASE_OPERATION_TIMEOUT_MS = 20000;
+let contactsCache: Contact[] | null = null;
+let contactsRequest: Promise<Contact[]> | null = null;
 
 function withFirebaseTimeout<T>(operation: Promise<T>, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -123,14 +125,29 @@ function toContact(id: string, data: Record<string, any>): Contact {
 }
 
 /** Every contact, newest first. Sorted client-side so no composite index is needed. */
-export async function getContacts(): Promise<Contact[]> {
+export async function getContacts(forceRefresh = false): Promise<Contact[]> {
+  if (contactsCache && !forceRefresh) return contactsCache;
+  if (contactsRequest && !forceRefresh) return contactsRequest;
+  contactsRequest = (async () => {
   const snapshot = await withFirebaseTimeout(
     getDocs(collection(db, CONTACTS_COLLECTION)),
     'Loading contacts'
   );
-  return snapshot.docs
+  const loaded = snapshot.docs
     .map((entry) => toContact(entry.id, entry.data()))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  contactsCache = loaded;
+  return loaded;
+  })();
+  try {
+    return await contactsRequest;
+  } finally {
+    contactsRequest = null;
+  }
+}
+
+export function invalidateContactsCache(): void {
+  contactsCache = null;
 }
 
 /** Resolve the contact record behind an email/password login. */
