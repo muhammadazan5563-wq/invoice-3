@@ -25,6 +25,7 @@ import Ledger from './Ledger';
 import KpiCards from './KpiCards';
 import InvoiceShowcase from './InvoiceShowcase';
 import Contacts from './Contacts';
+import { Contact, getContacts } from '../lib/contacts';
 import {
   LogOut,
   RefreshCw,
@@ -72,6 +73,7 @@ export default function Dashboard({ user, token, onLogout, onTokenRefresh }: Das
   const [viewState, setViewState] = useState<ViewState>('dashboard');
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>(undefined);
   const [showcaseSelection, setShowcaseSelection] = useState<Invoice | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
 
   // Filter strip state — drives the ledger + showcase below
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -95,7 +97,6 @@ CREATE TABLE IF NOT EXISTS invoices (
   date TEXT NOT NULL,
   customer_name TEXT NOT NULL,
   customer_email TEXT,
-  hotel_name TEXT,
   total_amount NUMERIC NOT NULL DEFAULT 0,
   amount_paid NUMERIC NOT NULL DEFAULT 0,
   payment_date TEXT,
@@ -105,6 +106,15 @@ CREATE TABLE IF NOT EXISTS invoices (
   items JSONB NOT NULL DEFAULT '[]'::jsonb,
   payments JSONB NOT NULL DEFAULT '[]'::jsonb
 );
+
+-- Vendor purchases live separately so vendor sorting and reporting stay fast
+CREATE TABLE IF NOT EXISTS vendor_invoices (LIKE invoices INCLUDING ALL);
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT NOT NULL DEFAULT 'customer';
+ALTER TABLE vendor_invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT NOT NULL DEFAULT 'vendor';
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE vendor_invoices ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+CREATE INDEX IF NOT EXISTS idx_vendor_invoices_date ON vendor_invoices (date DESC);
+CREATE INDEX IF NOT EXISTS idx_vendor_invoices_contact ON vendor_invoices (customer_email, customer_name);
 
 -- 2. Create the user_settings table for session persistence & settings
 CREATE TABLE IF NOT EXISTS user_settings (
@@ -135,6 +145,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
   useEffect(() => {
     fetchInvoices();
     loadTemplateSettings();
+    getContacts().then(setContacts).catch((err) => console.warn('Failed to load contacts:', err));
   }, []);
 
   const loadTemplateSettings = async () => {
@@ -235,7 +246,6 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         date: invoice.date,
         customerName: invoice.customerName,
         customerEmail: invoice.customerEmail,
-        hotelName: invoice.hotelName,
         totalAmount: invoice.totalAmount,
         amountPaid: invoice.totalAmount,
         paymentDate: todayStr,
@@ -244,6 +254,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         notes: invoice.notes,
         items: invoice.items,
         payments: [{ amount: invoice.totalAmount, date: todayStr }]
+        ,invoiceType: invoice.invoiceType || 'customer'
       };
 
       setLoadingInvoices(true);
@@ -297,7 +308,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     const performDelete = async () => {
       setLoadingInvoices(true);
       try {
-        await deleteInvoice(invoice.id);
+        await deleteInvoice(invoice.id, invoice.invoiceType || 'customer');
         setShowcaseSelection(null);
         await fetchInvoices();
       } catch (err: any) {
@@ -398,7 +409,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
 
   const pageTitle =
     viewState === 'dashboard'
-      ? 'Invoices'
+      ? 'Customer invoices'
       : viewState === 'create'
         ? 'New invoice'
         : viewState === 'edit'
@@ -411,7 +422,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
 
   const pageSubtitle =
     viewState === 'dashboard'
-      ? 'Manage and track all your invoices in one place.'
+      ? 'Manage customer sales, collections and fishery billing in one place.'
       : viewState === 'create'
         ? 'Draft a new invoice and send it for collection.'
         : viewState === 'edit'
@@ -777,8 +788,9 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         {/* ── Create / Edit ──────────────────────────────────── */}
         {(viewState === 'create' || viewState === 'edit') && (
           <div className="animate-fade-in" id="invoice-editor-section">
-            <InvoiceForm
+      <InvoiceForm
               invoice={editingInvoice}
+              contacts={contacts}
               suggestInvoiceId={
                 viewState === 'create' ? `INV-${Math.floor(1000 + Math.random() * 9000)}` : undefined
               }
