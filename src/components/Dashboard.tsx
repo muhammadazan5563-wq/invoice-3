@@ -170,7 +170,13 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     setLoadingInvoices(true);
     setError(null);
     try {
-      const [customerData, vendorData] = await Promise.all([getInvoices(), getVendorInvoices()]);
+      const customerData = await getInvoices();
+      let vendorData: Invoice[] = [];
+      try {
+        vendorData = await getVendorInvoices();
+      } catch (vendorError) {
+        console.warn('Vendor invoices are unavailable:', vendorError);
+      }
       setInvoices(customerData);
       setVendorInvoices(vendorData);
     } catch (err: any) {
@@ -795,7 +801,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
 
         {viewState === 'vendor-dashboard' && (
           <div className="space-y-6 animate-fade-in" id="vendor-dashboard-panels">
-            <KpiCards invoices={vendorInvoices} currencySymbol={currencySymbol} workspaceImage={WORKSPACE_IMAGE} onOpenLedger={() => setViewState('ledger')} template={invoiceTemplate} onCreateInvoice={() => { setEditingInvoice(undefined); setViewState('create'); }} onSync={fetchInvoices} loadingSync={loadingInvoices} />
+            <KpiCards mode="vendor" invoices={vendorInvoices} currencySymbol={currencySymbol} workspaceImage={WORKSPACE_IMAGE} onOpenLedger={() => setViewState('ledger')} template={invoiceTemplate} onCreateInvoice={() => { setEditingInvoice(undefined); setViewState('create'); }} onSync={fetchInvoices} loadingSync={loadingInvoices} />
             <InvoiceList invoices={vendorInvoices} onEdit={(invoice) => { setEditingInvoice(invoice); setViewState('edit'); }} onDelete={handleDeleteInvoice} onMarkAsPaid={handleMarkAsPaid} template={invoiceTemplate} />
           </div>
         )}
