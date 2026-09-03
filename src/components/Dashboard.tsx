@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 import { Invoice } from '../types';
 import {
   getInvoices,
+  getVendorInvoices,
   createInvoice,
   updateInvoice,
   deleteInvoice,
@@ -58,10 +59,11 @@ interface DashboardProps {
   onTokenRefresh?: (newToken: string) => void;
 }
 
-type ViewState = 'dashboard' | 'create' | 'edit' | 'settings' | 'ledger' | 'contacts';
+type ViewState = 'dashboard' | 'vendor-dashboard' | 'create' | 'edit' | 'settings' | 'ledger' | 'contacts';
 
 export default function Dashboard({ user, token, onLogout, onTokenRefresh }: DashboardProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [vendorInvoices, setVendorInvoices] = useState<Invoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
@@ -168,8 +170,9 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     setLoadingInvoices(true);
     setError(null);
     try {
-      const data = await getInvoices();
-      setInvoices(data);
+      const [customerData, vendorData] = await Promise.all([getInvoices(), getVendorInvoices()]);
+      setInvoices(customerData);
+      setVendorInvoices(vendorData);
     } catch (err: any) {
       setError(err.message || 'Failed to load invoices from Supabase.');
     } finally {
@@ -399,6 +402,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
 
   const navItems: { key: ViewState; label: string }[] = [
     { key: 'dashboard', label: 'Dashboard' },
+    { key: 'vendor-dashboard', label: 'Vendor dashboard' },
     { key: 'create', label: 'Invoice' },
     { key: 'ledger', label: 'Ledger' },
     { key: 'contacts', label: 'Contacts' },
@@ -410,6 +414,8 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
   const pageTitle =
     viewState === 'dashboard'
       ? 'Customer invoices'
+      : viewState === 'vendor-dashboard'
+        ? 'Vendor dashboard'
       : viewState === 'create'
         ? 'New invoice'
         : viewState === 'edit'
@@ -423,6 +429,8 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
   const pageSubtitle =
     viewState === 'dashboard'
       ? 'Manage customer sales, collections and fishery billing in one place.'
+      : viewState === 'vendor-dashboard'
+        ? 'Track vendor purchases, fish species, quantities and amounts payable.'
       : viewState === 'create'
         ? 'Draft a new invoice and send it for collection.'
         : viewState === 'edit'
@@ -782,6 +790,13 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
                 template={invoiceTemplate}
               />
             </section>
+          </div>
+        )}
+
+        {viewState === 'vendor-dashboard' && (
+          <div className="space-y-6 animate-fade-in" id="vendor-dashboard-panels">
+            <KpiCards invoices={vendorInvoices} currencySymbol={currencySymbol} workspaceImage={WORKSPACE_IMAGE} onOpenLedger={() => setViewState('ledger')} template={invoiceTemplate} onCreateInvoice={() => { setEditingInvoice(undefined); setViewState('create'); }} onSync={fetchInvoices} loadingSync={loadingInvoices} />
+            <InvoiceList invoices={vendorInvoices} onEdit={(invoice) => { setEditingInvoice(invoice); setViewState('edit'); }} onDelete={handleDeleteInvoice} onMarkAsPaid={handleMarkAsPaid} template={invoiceTemplate} />
           </div>
         )}
 
