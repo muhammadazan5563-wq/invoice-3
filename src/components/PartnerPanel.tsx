@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Invoice } from '../types';
 import { Session } from '../lib/auth';
-import { getInvoices } from '../lib/supabase';
+import { getInvoices, getVendorInvoices } from '../lib/supabase';
 import { formatCurrency } from '../lib/settings';
 import InvoiceQRCode from './InvoiceQRCode';
 
@@ -52,7 +52,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
     setLoading(true);
     setError('');
     try {
-      const all = await getInvoices();
+      const all = role === 'vendor' ? await getVendorInvoices() : await getInvoices();
       const email = (contact?.email || session.user.email || '').toLowerCase();
       const name = (contact?.fullName || '').trim().toLowerCase();
 
@@ -177,7 +177,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
           <p className="text-[12px] text-quill-soft font-medium mt-2">
             {view === 'dashboard'
               ? 'Your billing summary and account details.'
-              : 'Every invoice issued against your account.'}
+              : role === 'vendor' ? 'Every purchase invoice recorded for your supply.' : 'Every sales invoice issued against your account.'}
           </p>
         </div>
 
