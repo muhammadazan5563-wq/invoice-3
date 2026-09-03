@@ -346,7 +346,7 @@ export default function InvoiceShowcase({
                       {item.roomType || 'Line item'}
                     </span>
                     <span className="nums block text-[10px] text-white/50 mt-0.5">
-                      {item.quantity} × {item.nights} night{item.nights === 1 ? '' : 's'}
+                      {item.quantity} kg × {currencySymbol}{money(item.price)} per kg
                     </span>
                   </div>
                 </div>
