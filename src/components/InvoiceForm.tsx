@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Invoice, BookingItem, PaymentRecord } from '../types';
+import { Contact } from '../lib/contacts';
 import { InvoiceTemplate, getCurrencySymbol } from '../lib/settings';
 import { getTodayInTimezone } from '../lib/timezone';
 import { Plus, Trash2, ArrowLeft, Save, Sparkles } from 'lucide-react';
 
 interface InvoiceFormProps {
   invoice?: Invoice;
+  contacts: Contact[];
   onSave: (invoiceData: Omit<Invoice, 'rowIndex' | 'rawRow'> & { rowIndex?: number }) => Promise<void>;
   onCancel: () => void;
   suggestInvoiceId?: string;
@@ -25,14 +27,17 @@ const labelClass = 'block text-[10px] font-bold text-quill-soft uppercase tracki
 const money = (n: number) =>
   n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceId, template }: InvoiceFormProps) {
+export default function InvoiceForm({ invoice, contacts, onSave, onCancel, suggestInvoiceId, template }: InvoiceFormProps) {
   const currencySymbol = getCurrencySymbol(template?.currency || 'USD');
 
   const [id, setId] = useState('');
   const [date, setDate] = useState('');
+  const [invoiceType, setInvoiceType] = useState<'customer' | 'vendor'>('customer');
+  const [contactSearch, setContactSearch] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [hotelName, setHotelName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [paymentDate, setPaymentDate] = useState('');
   const [status, setStatus] = useState<FormStatus>('Pending');
@@ -48,13 +53,35 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
   const defaultNotes =
     template?.paymentDetails || `Beneficiary: Bank of America\nSwift Sort\nAccount No.: 324 6654 7766 9992`;
 
+  const eligibleContacts = useMemo(
+    () => contacts.filter((contact) => contact.type === invoiceType),
+    [contacts, invoiceType]
+  );
+  const contactMatches = useMemo(() => {
+    const query = contactSearch.trim().toLowerCase();
+    if (!query) return [];
+    return eligibleContacts
+      .filter((contact) => `${contact.fullName} ${contact.email} ${contact.companyName}`.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [contactSearch, eligibleContacts]);
+
+  const selectContact = (contact: Contact) => {
+    setSelectedContactId(contact.id);
+    setContactSearch(contact.fullName);
+    setCustomerName(contact.fullName);
+    setCustomerEmail(contact.email);
+    setCustomerPhone(contact.phone);
+  };
+
   useEffect(() => {
     if (invoice) {
       setId(invoice.id);
       setDate(invoice.date);
+      setInvoiceType(invoice.invoiceType || 'customer');
       setCustomerName(invoice.customerName);
+      setContactSearch(invoice.customerName);
       setCustomerEmail(invoice.customerEmail);
-      setHotelName(invoice.hotelName || '');
+      setCustomerPhone(invoice.customerPhone || '');
       setAmountPaid(invoice.amountPaid);
       setPaymentDate(invoice.paymentDate || invoice.date);
       setStatus(invoice.status);
@@ -78,16 +105,19 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
       const today = getTodayInTimezone(template?.timezone || 'UTC');
       setId(suggestInvoiceId || `INV-${Math.floor(1000 + Math.random() * 9000)}`);
       setDate(today);
+      setInvoiceType('customer');
       setCustomerName('');
+      setContactSearch('');
+      setSelectedContactId('');
       setCustomerEmail('');
-      setHotelName(template?.defaultHotelName || '');
+      setCustomerPhone('');
       setAmountPaid(0);
       setPaymentDate(today);
       setStatus('Due');
       setNotes(template?.paymentDetails || template?.defaultNotes || defaultNotes);
       setItems([
         {
-          roomType: 'AVG 4.5',
+          roomType: 'Tuna',
           quantity: 1,
           checkIn: today,
           checkOut: getNextDayStr(today),
@@ -124,7 +154,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
   };
 
   useEffect(() => {
-    const calculatedSubtotal = items.reduce((acc, curr) => acc + curr.quantity * curr.nights * curr.price, 0);
+    const calculatedSubtotal = items.reduce((acc, curr) => acc + curr.quantity * curr.price, 0);
     setSubtotal(calculatedSubtotal);
   }, [items]);
 
@@ -173,6 +203,8 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
 
     if (field === 'roomType') {
       currentItem.roomType = value;
+    } else if (field === 'description') {
+      currentItem.description = value;
     } else if (field === 'quantity') {
       currentItem.quantity = Math.max(1, parseInt(value) || 0);
     } else if (field === 'checkIn') {
@@ -187,7 +219,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
       currentItem.price = Math.max(0, parseFloat(value) || 0);
     }
 
-    currentItem.total = currentItem.quantity * currentItem.nights * currentItem.price;
+    currentItem.total = currentItem.quantity * currentItem.price;
     updated[index] = currentItem;
     setItems(updated);
   };
@@ -197,7 +229,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
     setItems([
       ...items,
       {
-        roomType: 'AVG 4.5',
+        roomType: 'Tuna',
         quantity: 1,
         checkIn: today,
         checkOut: getNextDayStr(today),
@@ -220,11 +252,11 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
       return;
     }
     if (!customerName.trim()) {
-      setError('Add the guest name so the invoice can be addressed.');
+      setError(`Select a ${invoiceType} contact so the invoice can be addressed.`);
       return;
     }
     if (items.some((item) => !item.roomType.trim())) {
-      setError('Every booking line needs a room or room type.');
+      setError('Every fish line needs a species, quantity and rate.');
       return;
     }
 
@@ -237,9 +269,10 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
         rowIndex: invoice?.rowIndex,
         id: id.trim(),
         date,
+        invoiceType,
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim(),
-        hotelName: hotelName.trim(),
+        customerPhone: customerPhone.trim(),
         totalAmount: subtotal,
         amountPaid,
         paymentDate: paymentDate || date,
@@ -248,7 +281,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
         notes: notes.trim(),
         items: items.map((item) => ({
           ...item,
-          total: item.quantity * item.nights * item.price
+          total: item.quantity * item.price
         })),
         payments: payments.filter((p) => p.amount > 0 || p.date)
       });
@@ -268,8 +301,8 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
     setStatus('Pending');
     setNotes(defaultNotes);
     setItems([
-      { roomType: 'AVG 4.5', quantity: 4, checkIn: '2026-07-18', checkOut: '2026-07-20', nights: 2, price: 50.0, total: 400.0 },
-      { roomType: 'AVG 4.5', quantity: 4, checkIn: '2026-07-18', checkOut: '2026-07-22', nights: 4, price: 75.0, total: 1200.0 }
+      { roomType: 'Tuna', quantity: 4, checkIn: '2026-07-18', checkOut: '2026-07-20', nights: 2, price: 50.0, total: 400.0 },
+      { roomType: 'Tuna', quantity: 4, checkIn: '2026-07-18', checkOut: '2026-07-22', nights: 4, price: 75.0, total: 1200.0 }
     ]);
     setPayments([{ amount: 600.0, date: '2026-07-18' }]);
   };
@@ -307,7 +340,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
             {invoice ? `Edit invoice #${invoice.id}` : 'Create an invoice'}
           </h2>
           <p className="text-[12px] text-quill-soft font-medium mt-2">
-            Room bookings, payments and totals — synced to your database.
+            Fish line items, payments and totals — synced to your database.
           </p>
         </div>
 
@@ -317,7 +350,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
             onClick={generateSampleItems}
             className="flex items-center gap-2 bg-brand-pale text-brand hover:bg-[#e6e2fd] text-[12px] font-bold px-4 py-3 rounded-full transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
-            <Sparkles className="w-3.5 h-3.5" /> Fill sample booking
+            <Sparkles className="w-3.5 h-3.5" /> Fill sample fishery invoice
           </button>
         )}
       </div>
@@ -355,54 +388,28 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
           </div>
         </div>
 
-        {/* Guest */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div>
-            <label htmlFor="inv-guest" className={labelClass}>Guest name</label>
-            <input
-              id="inv-guest"
-              type="text"
-              required
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className={fieldClass}
-              placeholder="e.g. James Carter"
-            />
+        {/* Guest / vendor contact */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div className="relative">
+            <label htmlFor="inv-contact" className={labelClass}>{invoiceType === 'vendor' ? 'Vendor name' : 'Customer name'}</label>
+            <input id="inv-contact" type="text" required value={contactSearch || customerName} onChange={(e) => { setContactSearch(e.target.value); setCustomerName(e.target.value); setSelectedContactId(''); }} className={fieldClass} placeholder={`Search ${invoiceType} name`} />
+            {contactMatches.length > 0 && !selectedContactId && <div className="absolute z-10 top-full left-0 right-0 mt-2 bg-shell rounded-2xl shadow-xl border border-hairline overflow-hidden">{contactMatches.map((contact) => <button type="button" key={contact.id} onClick={() => selectContact(contact)} className="w-full text-left px-4 py-3 hover:bg-mist text-[12px] font-bold text-ink">{contact.fullName}<span className="block text-[10px] text-quill font-medium">{contact.email}{contact.phone ? ` · ${contact.phone}` : ''}</span></button>)}</div>}
           </div>
-          <div>
-            <label htmlFor="inv-email" className={labelClass}>Guest email</label>
-            <input
-              id="inv-email"
-              type="email"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              className={fieldClass}
-              placeholder="e.g. james@brightwave.com"
-            />
-          </div>
-          <div>
-            <label htmlFor="inv-hotel" className={labelClass}>Property / company</label>
-            <input
-              id="inv-hotel"
-              type="text"
-              value={hotelName}
-              onChange={(e) => setHotelName(e.target.value)}
-              className={fieldClass}
-              placeholder="e.g. BrightWave Suites"
-            />
-          </div>
+          <div><label htmlFor="inv-email" className={labelClass}>{invoiceType === 'vendor' ? 'Vendor email' : 'Customer email'}</label><input id="inv-email" type="email" value={customerEmail} readOnly={!!selectedContactId} onChange={(e) => setCustomerEmail(e.target.value)} className={fieldClass} placeholder="Email" /></div>
+          <div><label htmlFor="inv-phone" className={labelClass}>Phone</label><input id="inv-phone" value={customerPhone} readOnly={!!selectedContactId} onChange={(e) => setCustomerPhone(e.target.value)} className={fieldClass} placeholder="Phone" /></div>
+          <div><label htmlFor="inv-type" className={labelClass}>Invoice type</label><select id="inv-type" disabled={!!invoice} value={invoiceType} onChange={(e) => { setInvoiceType(e.target.value as 'customer' | 'vendor'); setContactSearch(''); setSelectedContactId(''); setCustomerName(''); setCustomerEmail(''); setCustomerPhone(''); }} className={fieldClass}><option value="customer">Customer sale</option><option value="vendor">Vendor purchase</option></select></div>
         </div>
 
         {/* Booking lines */}
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-[15px] font-extrabold text-ink font-display">Room bookings</h3>
+            <h3 className="text-[15px] font-extrabold text-ink font-display">Fish line items</h3>
             <button
               type="button"
               onClick={addItemRow}
               className="flex items-center gap-1.5 bg-brand-pale text-brand hover:bg-[#e6e2fd] text-[11px] font-bold px-3.5 py-2.5 rounded-full transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
-              <Plus className="w-3.5 h-3.5" /> Add booking line
+              <Plus className="w-3.5 h-3.5" /> Add fish line
             </button>
           </div>
 
@@ -411,12 +418,10 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
               <table className="w-full min-w-[900px] text-left border-collapse">
                 <thead>
                   <tr className="text-quill">
-                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-1/4">Room type</th>
-                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-20 text-center">Qty</th>
-                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider text-center">Check-in</th>
-                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider text-center">Check-out</th>
-                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-20 text-center">Nights</th>
-                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-28 text-right">Rate</th>
+                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-1/4">Fish species</th>
+                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-1/4">Description</th>
+                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-20 text-center">Quantity kg</th>
+                    <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-28 text-right">Rate per kg</th>
                     <th className="py-3.5 px-4 text-[10px] font-bold uppercase tracking-wider w-32 text-right">Amount</th>
                     <th className="py-3.5 px-4 w-12" />
                   </tr>
@@ -428,7 +433,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
                         <input
                           type="text"
                           required
-                          aria-label={`Room type for line ${index + 1}`}
+                          aria-label={`Fish species for line ${index + 1}`}
                           value={item.roomType}
                           onChange={(e) => handleItemChange(index, 'roomType', e.target.value)}
                           className={cellClass}
@@ -437,10 +442,21 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
                       </td>
                       <td className="p-3">
                         <input
+                          type="text"
+                          aria-label={`Description for line ${index + 1}`}
+                          value={item.description || ''}
+                          onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                          className={cellClass}
+                          placeholder="Grade / notes"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <input
                           type="number"
                           required
-                          min="1"
-                          aria-label={`Quantity for line ${index + 1}`}
+                          min="0.01"
+                          step="0.01"
+                          aria-label={`Quantity in kilograms for line ${index + 1}`}
                           value={item.quantity}
                           onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                           className={`${cellClass} nums text-center`}
@@ -448,32 +464,11 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
                       </td>
                       <td className="p-3">
                         <input
-                          type="date"
-                          required
-                          aria-label={`Check-in for line ${index + 1}`}
-                          value={item.checkIn}
-                          onChange={(e) => handleItemChange(index, 'checkIn', e.target.value)}
-                          className={`${cellClass} nums`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <input
-                          type="date"
-                          required
-                          aria-label={`Check-out for line ${index + 1}`}
-                          value={item.checkOut}
-                          onChange={(e) => handleItemChange(index, 'checkOut', e.target.value)}
-                          className={`${cellClass} nums`}
-                        />
-                      </td>
-                      <td className="nums p-3 text-center text-[13px] font-bold text-ink">{item.nights}</td>
-                      <td className="p-3">
-                        <input
                           type="number"
                           required
                           min="0"
                           step="0.01"
-                          aria-label={`Nightly rate for line ${index + 1}`}
+                          aria-label={`Rate per kilogram for line ${index + 1}`}
                           value={item.price || ''}
                           onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                           className={`${cellClass} nums text-right`}
@@ -481,7 +476,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
                         />
                       </td>
                       <td className="nums p-3 text-right text-[13px] font-bold text-ink pr-4">
-                        {currencySymbol}{money(item.quantity * item.nights * item.price)}
+                        {currencySymbol}{money(item.quantity * item.price)}
                       </td>
                       <td className="p-3 text-center">
                         <button
@@ -522,7 +517,7 @@ export default function InvoiceForm({ invoice, onSave, onCancel, suggestInvoiceI
             </div>
 
             <div>
-              <label htmlFor="inv-notes" className={labelClass}>Payment &amp; banking details</label>
+              <label htmlFor="inv-notes" className={labelClass}>Payment &amp; fishery details</label>
               <textarea
                 id="inv-notes"
                 value={notes}
