@@ -21,6 +21,7 @@ import {
   createContact,
   generatePassword,
   getContacts,
+  updateContact,
 } from '../lib/contacts';
 
 const fieldClass =
@@ -81,6 +82,7 @@ export default function Contacts() {
   const [listError, setListError] = useState('');
 
   const [showForm, setShowForm] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [draft, setDraft] = useState<ContactDraft>(emptyDraft);
   const [files, setFiles] = useState<{ cnicFront: File | null; cnicBack: File | null; cheque: File | null }>({
     cnicFront: null,
@@ -140,14 +142,20 @@ export default function Contacts() {
           ? { cnicFront: files.cnicFront, cnicBack: files.cnicBack, cheque: files.cheque }
           : {};
 
-      const result = await createContact(draft, payload);
-      setCreated({
-        name: result.contact.fullName,
-        email: result.contact.email,
-        password: result.password,
-      });
-      setContacts((previous) => [result.contact, ...previous]);
+      if (editingContact) {
+        const updated = await updateContact(editingContact, draft, payload);
+        setContacts((previous) => previous.map((contact) => contact.id === updated.id ? updated : contact));
+      } else {
+        const result = await createContact(draft, payload);
+        setCreated({
+          name: result.contact.fullName,
+          email: result.contact.email,
+          password: result.password,
+        });
+        setContacts((previous) => [result.contact, ...previous]);
+      }
       resetForm();
+      setEditingContact(null);
       setShowForm(false);
     } catch (err: any) {
       setFormError(err?.message || 'Failed to create the contact.');
@@ -256,6 +264,7 @@ export default function Contacts() {
           type="button"
           onClick={() => {
             resetForm();
+            setEditingContact(null);
             setShowForm((previous) => !previous);
           }}
           className="flex items-center gap-2 bg-brand hover:bg-brand-mid text-white text-[13px] font-bold pl-5 pr-6 py-3.5 rounded-full transition-colors duration-200 cursor-pointer shadow-[0_18px_34px_-20px_rgba(90,73,230,0.95)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
@@ -273,8 +282,8 @@ export default function Contacts() {
         >
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h3 className="text-[17px] font-extrabold text-ink font-display tracking-tight">
-                New contact
+                  <h3 className="text-[17px] font-extrabold text-ink font-display tracking-tight">
+                {editingContact ? 'Edit contact' : 'New contact'}
               </h3>
               <p className="text-[12px] text-quill-soft font-medium mt-1">
                 Saving also creates their login account. You stay signed in as administrator.
@@ -483,6 +492,7 @@ export default function Contacts() {
               onClick={() => {
                 setShowForm(false);
                 resetForm();
+                setEditingContact(null);
               }}
               className="px-5 py-3 bg-shell hover:bg-mist-2 disabled:opacity-55 text-ink rounded-full text-[12px] font-bold transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
@@ -493,7 +503,7 @@ export default function Contacts() {
               disabled={saving}
               className="px-6 py-3 bg-brand hover:bg-brand-mid disabled:opacity-60 disabled:pointer-events-none text-white rounded-full text-[12px] font-bold transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
-              {saving ? 'Creating account…' : `Save ${isVendor ? 'vendor' : 'customer'}`}
+              {saving ? (editingContact ? 'Saving changes…' : 'Creating account…') : editingContact ? 'Save changes' : `Save ${isVendor ? 'vendor' : 'customer'}`}
             </button>
           </div>
         </form>
@@ -570,15 +580,34 @@ export default function Contacts() {
                       {contact.email}
                     </p>
                   </div>
-                  <span
-                    className={`text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full shrink-0 ${
-                      contact.type === 'vendor'
-                        ? 'bg-brand text-white'
-                        : 'bg-ink text-white'
-                    }`}
-                  >
-                    {contact.type}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingContact(contact);
+                        setDraft({
+                          type: contact.type,
+                          fullName: contact.fullName,
+                          phone: contact.phone,
+                          email: contact.email,
+                          password: '',
+                          companyName: contact.companyName,
+                          location: contact.location,
+                          address: contact.address,
+                          area: contact.area,
+                        });
+                        setFiles({ cnicFront: null, cnicBack: null, cheque: null });
+                        setFormError('');
+                        setShowForm(true);
+                      }}
+                      className="bg-shell hover:bg-mist-2 text-ink text-[10px] font-bold px-3 py-1.5 rounded-full cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full ${contact.type === 'vendor' ? 'bg-brand text-white' : 'bg-ink text-white'}`}>
+                      {contact.type}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-4 space-y-1.5 text-[11px] text-quill font-semibold">
