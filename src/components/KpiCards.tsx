@@ -22,6 +22,7 @@ interface KpiCardsProps {
   onCreateInvoice?: () => void;
   onSync?: () => void;
   loadingSync?: boolean;
+  mode?: 'customer' | 'vendor';
 }
 
 const money = (n: number) =>
@@ -34,7 +35,9 @@ export default function KpiCards({
   onCreateInvoice,
   onSync,
   loadingSync,
+  mode = 'customer',
 }: KpiCardsProps) {
+  const isVendor = mode === 'vendor';
   // Calculate KPIs
   let totalRevenue = 0;
   let totalPaid = 0;
@@ -103,7 +106,7 @@ export default function KpiCards({
       <div className="lg:col-span-4 flex flex-col gap-5">
         {/* Total Revenue Card */}
         <div className="bg-shell p-6 sm:p-7 rounded-[26px] shadow-[0_18px_40px_-32px_rgba(19,17,38,0.5)]">
-          <span className="text-[10px] font-bold text-quill-soft uppercase tracking-widest">Total Revenue</span>
+          <span className="text-[10px] font-bold text-quill-soft uppercase tracking-widest">{isVendor ? 'Total Purchases' : 'Total Revenue'}</span>
           <div className="mt-3 flex items-baseline gap-1">
             <span className="nums text-[42px] sm:text-[48px] leading-none font-extrabold text-ink tracking-tight">
               {currencySymbol}{money(totalRevenue)}
@@ -137,7 +140,7 @@ export default function KpiCards({
             <div className="bg-[#e8f7ee] rounded-[18px] p-3.5 text-center">
               <div className="flex items-center justify-center gap-1.5 text-[#2f6b48] mb-1">
                 <CheckCircle className="w-3.5 h-3.5" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">Collected</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider">{isVendor ? 'Paid to vendors' : 'Collected'}</span>
               </div>
               <span className="nums text-[15px] font-extrabold text-[#2f6b48]">
                 {currencySymbol}{money(totalPaid)}
@@ -146,7 +149,7 @@ export default function KpiCards({
             <div className="bg-[#fdf3e2] rounded-[18px] p-3.5 text-center">
               <div className="flex items-center justify-center gap-1.5 text-[#8a5c17] mb-1">
                 <Clock className="w-3.5 h-3.5" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">Pending</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider">{isVendor ? 'Payable' : 'Pending'}</span>
               </div>
               <span className="nums text-[15px] font-extrabold text-[#8a5c17]">
                 {currencySymbol}{money(totalPending)}
@@ -155,7 +158,7 @@ export default function KpiCards({
             <div className="bg-[#fdeeea] rounded-[18px] p-3.5 text-center">
               <div className="flex items-center justify-center gap-1.5 text-[#a8492f] mb-1">
                 <AlertCircle className="w-3.5 h-3.5" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">Overdue</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider">{isVendor ? 'Overdue payable' : 'Overdue'}</span>
               </div>
               <span className="nums text-[15px] font-extrabold text-[#a8492f]">{overdueCount}</span>
             </div>
@@ -167,7 +170,7 @@ export default function KpiCards({
           {/* Total Invoice Due Card */}
           <div className="bg-shell p-5 rounded-[26px] shadow-[0_18px_40px_-32px_rgba(19,17,38,0.5)]">
             <div className="flex justify-between items-start mb-3">
-              <span className="text-[10px] font-bold text-quill-soft uppercase tracking-widest">Invoice Due</span>
+              <span className="text-[10px] font-bold text-quill-soft uppercase tracking-widest">{isVendor ? 'Purchase Payable' : 'Invoice Due'}</span>
               <div className="w-8 h-8 rounded-full bg-[#fdf3e2] flex items-center justify-center">
                 <FileWarning className="w-4 h-4 text-[#d97706]" />
               </div>
@@ -191,7 +194,7 @@ export default function KpiCards({
           {/* Total Overdue Amount Card */}
           <div className="bg-shell p-5 rounded-[26px] shadow-[0_18px_40px_-32px_rgba(19,17,38,0.5)]">
             <div className="flex justify-between items-start mb-3">
-              <span className="text-[10px] font-bold text-quill-soft uppercase tracking-widest">Overdue Amount</span>
+              <span className="text-[10px] font-bold text-quill-soft uppercase tracking-widest">{isVendor ? 'Overdue Payable' : 'Overdue Amount'}</span>
               <div className="w-8 h-8 rounded-full bg-[#fdeeea] flex items-center justify-center">
                 <Banknote className="w-4 h-4 text-[#dc2626]" />
               </div>
@@ -217,7 +220,7 @@ export default function KpiCards({
       {/* ═══ MIDDLE COLUMN: Today Collection ═══ */}
       <div className="lg:col-span-2 bg-shell p-6 sm:p-7 rounded-[26px] shadow-[0_18px_40px_-32px_rgba(19,17,38,0.5)] flex flex-col">
         <div className="flex justify-between items-center mb-2">
-          <h3 className="text-[15px] font-extrabold text-ink">Today Collection</h3>
+          <h3 className="text-[15px] font-extrabold text-ink">{isVendor ? 'Today Vendor Payments' : 'Today Collection'}</h3>
           <TrendingUp className="w-4 h-4 text-quill-soft" />
         </div>
 
@@ -225,16 +228,16 @@ export default function KpiCards({
           <span className="nums text-[34px] font-extrabold text-ink">
             {currencySymbol}{money(todayTotal)}
           </span>
-          <p className="text-[12px] text-quill-soft font-medium mt-2">Collected today</p>
+          <p className="text-[12px] text-quill-soft font-medium mt-2">{isVendor ? 'Paid to vendors today' : 'Collected today'}</p>
         </div>
 
         <div className="mt-auto space-y-2">
           <div className="flex justify-between items-center text-[11px]">
-            <span className="text-quill-soft font-medium">Invoices paid today</span>
+            <span className="text-quill-soft font-medium">{isVendor ? 'Vendor invoices paid today' : 'Invoices paid today'}</span>
             <span className="nums font-bold text-ink">{todayPaidCount}</span>
           </div>
           <div className="flex justify-between items-center text-[11px]">
-            <span className="text-quill-soft font-medium">Pending today</span>
+            <span className="text-quill-soft font-medium">{isVendor ? 'Purchases pending today' : 'Pending today'}</span>
             <span className="nums font-bold text-ink">{todayPendingCount}</span>
           </div>
         </div>
@@ -245,7 +248,7 @@ export default function KpiCards({
         {/* Collection Health Gauge */}
         <div className="bg-shell p-5 rounded-[26px] shadow-[0_18px_40px_-32px_rgba(19,17,38,0.5)] flex flex-col flex-1">
           <div className="flex justify-between items-center mb-1">
-            <h3 className="text-[15px] font-extrabold text-ink">Collection Health</h3>
+            <h3 className="text-[15px] font-extrabold text-ink">{isVendor ? 'Vendor Payment Health' : 'Collection Health'}</h3>
             <TrendingUp className="w-4 h-4 text-quill-soft" />
           </div>
 
@@ -269,14 +272,14 @@ export default function KpiCards({
           </div>
 
           <p className="text-[10px] text-quill-soft text-center leading-relaxed mt-auto font-medium">
-            Share of billed revenue collected across {invoices.length} invoice{invoices.length === 1 ? '' : 's'}.
+            {isVendor ? 'Share of vendor purchases paid across ' : 'Share of billed revenue collected across '}{invoices.length} invoice{invoices.length === 1 ? '' : 's'}.
           </p>
         </div>
 
         {/* Summary Card */}
         <div className="bg-shell p-5 rounded-[26px] shadow-[0_18px_40px_-32px_rgba(19,17,38,0.5)] flex flex-col">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-[15px] font-extrabold text-ink">Summary</h3>
+            <h3 className="text-[15px] font-extrabold text-ink">{isVendor ? 'Vendor purchase summary' : 'Summary'}</h3>
             <Receipt className="w-4 h-4 text-quill-soft" />
           </div>
           <div className="space-y-2.5">
@@ -297,7 +300,7 @@ export default function KpiCards({
               <span className="nums text-[12px] font-bold text-[#a8492f]">{overdueCount}</span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-hairline">
-              <span className="text-[11px] text-quill-soft font-medium">Avg Invoice</span>
+              <span className="text-[11px] text-quill-soft font-medium">{isVendor ? 'Avg Purchase' : 'Avg Invoice'}</span>
               <span className="nums text-[12px] font-bold text-ink">
                 {currencySymbol}{invoices.length > 0 ? money(Math.round(totalRevenue / invoices.length)) : '0'}
               </span>
