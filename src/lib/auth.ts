@@ -9,7 +9,7 @@ import {
 import { auth } from './firebase';
 import { Contact, getContactByEmail } from './contacts';
 
-/** Google accounts are administrators; everyone else is a vendor or a customer. */
+/** Gogle accounts are administrators; everyone else is a vendor or a customer. */
 export type Role = 'admin' | 'vendor' | 'customer';
 
 export interface Session {
