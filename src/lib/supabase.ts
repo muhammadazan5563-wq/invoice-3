@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { Invoice } from '../types';
 
 const supabaseUrl =
-  (import.meta as any).env?.VITE_SUPABASE_URL || 'https://jybjzbtgpnhkdyofayji.supabase.co';
+  (import.meta as any).env?.VITE_SUPABASE_URL || 'https://rfmdptajmsvsqkrikugy.supabase.co';
 const supabaseKey =
   (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_FDeECQfWSc89GcQVAUAhyA_QuEfE4AY';
+  'sb_publishable_GMAKWARwjUkSiWL4lHLBuA_DNVTcheD';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
