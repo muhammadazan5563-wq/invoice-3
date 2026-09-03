@@ -24,6 +24,7 @@ import Settings from './Settings';
 import Ledger from './Ledger';
 import KpiCards from './KpiCards';
 import InvoiceShowcase from './InvoiceShowcase';
+import Contacts from './Contacts';
 import {
   LogOut,
   RefreshCw,
@@ -56,7 +57,7 @@ interface DashboardProps {
   onTokenRefresh?: (newToken: string) => void;
 }
 
-type ViewState = 'dashboard' | 'create' | 'edit' | 'settings' | 'ledger';
+type ViewState = 'dashboard' | 'create' | 'edit' | 'settings' | 'ledger' | 'contacts';
 
 export default function Dashboard({ user, token, onLogout, onTokenRefresh }: DashboardProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -389,6 +390,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'create', label: 'Invoice' },
     { key: 'ledger', label: 'Ledger' },
+    { key: 'contacts', label: 'Contacts' },
     { key: 'settings', label: 'Settings' },
   ];
 
@@ -401,9 +403,11 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         ? 'New invoice'
         : viewState === 'edit'
           ? 'Edit invoice'
-          : viewState === 'ledger'
-            ? 'Ledger'
-            : 'Settings';
+            : viewState === 'ledger'
+              ? 'Ledger'
+              : viewState === 'contacts'
+                ? 'Contacts'
+              : 'Settings';
 
   const pageSubtitle =
     viewState === 'dashboard'
@@ -412,9 +416,11 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         ? 'Draft a new invoice and send it for collection.'
         : viewState === 'edit'
           ? 'Adjust line items, totals and payment records.'
-          : viewState === 'ledger'
-            ? 'Every payment movement, reconciled by date.'
-            : 'Company profile, currency and sheet connection.';
+            : viewState === 'ledger'
+              ? 'Every payment movement, reconciled by date.'
+              : viewState === 'contacts'
+                ? 'Manage the vendors and customers connected to your ledger.'
+              : 'Company profile, currency and sheet connection.';
 
   return (
     <div className="min-h-screen bg-canvas px-3 sm:px-5 py-4 sm:py-6" id="dashboard-root">
@@ -554,6 +560,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
             >
               <SlidersHorizontal className="w-4 h-4 text-ink" />
             </button>
+            {viewState !== 'contacts' && (
             <button
               type="button"
               onClick={() => {
@@ -564,6 +571,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
             >
               <Plus className="w-4 h-4" /> Create an invoice
             </button>
+            )}
           </div>
         </div>
 
@@ -788,6 +796,13 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         {viewState === 'ledger' && (
           <div className="animate-fade-in">
             <Ledger template={invoiceTemplate} />
+          </div>
+        )}
+
+        {/* ── Contacts ────────────────────────────────────────── */}
+        {viewState === 'contacts' && (
+          <div className="animate-fade-in" id="contacts-section">
+            <Contacts />
           </div>
         )}
 
