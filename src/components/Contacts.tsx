@@ -22,6 +22,7 @@ import {
   generatePassword,
   getContacts,
   updateContact,
+  invalidateContactsCache,
 } from '../lib/contacts';
 
 const fieldClass =
@@ -144,9 +145,11 @@ export default function Contacts() {
 
       if (editingContact) {
         const updated = await updateContact(editingContact, draft, payload);
+        invalidateContactsCache();
         setContacts((previous) => previous.map((contact) => contact.id === updated.id ? updated : contact));
       } else {
         const result = await createContact(draft, payload);
+        invalidateContactsCache();
         setCreated({
           name: result.contact.fullName,
           email: result.contact.email,
@@ -413,6 +416,13 @@ export default function Contacts() {
               </>
             ) : (
               <>
+                <div>
+                  <label className={labelClass} htmlFor="contact-password-customer">Password</label>
+                  <div className="flex gap-2">
+                    <input id="contact-password-customer" type="text" value={draft.password} disabled={saving} onChange={(event) => setDraft({ ...draft, password: event.target.value })} placeholder="At least 6 characters" className={fieldClass} />
+                    <button type="button" disabled={saving} onClick={() => setDraft({ ...draft, password: generatePassword() })} className="shrink-0 bg-shell hover:bg-mist-2 disabled:opacity-55 text-ink text-[11px] font-bold px-4 rounded-2xl transition-colors duration-200 cursor-pointer">Generate</button>
+                  </div>
+                </div>
                 <div>
                   <label className={labelClass} htmlFor="contact-address">
                     Address
