@@ -9,7 +9,10 @@ import {
   collection,
   doc,
   getDocs,
+  limit,
+  query,
   setDoc,
+  where,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, firebaseConfig, storage } from './firebase';
@@ -134,8 +137,20 @@ export async function getContactByEmail(email: string): Promise<Contact | null> 
   const target = normalizeEmail(email);
   if (!target) return null;
 
-  // Read the collection and normalize locally so records created before email
-  // normalization was introduced are still found during login and duplicate checks.
+  // New records store normalized emails, so use a direct indexed lookup for the
+  // normal path. This avoids downloading the entire contacts collection on every
+  // login and duplicate check.
+  const snapshot = await withFirebaseTimeout(
+    getDocs(query(collection(db, CONTACTS_COLLECTION), where('email', '==', target), limit(1))),
+    'Finding the contact'
+  );
+  if (!snapshot.empty) {
+    const entry = snapshot.docs[0];
+    return toContact(entry.id, entry.data());
+  }
+
+  // Preserve compatibility with older records whose email casing was not
+  // normalized when they were created.
   const contacts = await getContacts();
   return contacts.find((contact) => normalizeEmail(contact.email) === target) || null;
 }
