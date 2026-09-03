@@ -1,5 +1,10 @@
 import { getApps, initializeApp } from 'firebase/app';
-import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import {
   collection,
   doc,
@@ -60,15 +65,22 @@ const PROVISIONER_APP_NAME = 'contact-provisioner';
 const FIREBASE_OPERATION_TIMEOUT_MS = 20000;
 
 function withFirebaseTimeout<T>(operation: Promise<T>, message: string): Promise<T> {
-  return Promise.race([
-    operation,
-    new Promise<T>((_, reject) => {
-      window.setTimeout(
-        () => reject(new Error(`${message} timed out. Check your Firebase connection and try again.`)),
-        FIREBASE_OPERATION_TIMEOUT_MS
-      );
-    }),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error(`${message} timed out. Check your Firebase connection and try again.`)),
+      FIREBASE_OPERATION_TIMEOUT_MS
+    );
+    operation.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function normalizeEmail(email: string): string {
@@ -146,10 +158,21 @@ async function provisionLogin(email: string, password: string): Promise<string> 
   const provisionerApp = existingApp || initializeApp(firebaseConfig, PROVISIONER_APP_NAME);
   const provisionerAuth = getAuth(provisionerApp);
 
-  const credential = await withFirebaseTimeout(
-    createUserWithEmailAndPassword(provisionerAuth, email, password),
-    'Creating the login account'
-  );
+  let credential;
+  try {
+    credential = await withFirebaseTimeout(
+      createUserWithEmailAndPassword(provisionerAuth, email, password),
+      'Creating the login account'
+    );
+  } catch (error: any) {
+    // A previous attempt may have created Auth before timing out while writing
+    // Firestore. Reuse that account when the supplied password matches it.
+    if (error?.code !== 'auth/email-already-in-use') throw error;
+    credential = await withFirebaseTimeout(
+      signInWithEmailAndPassword(provisionerAuth, email, password),
+      'Recovering the existing login account'
+    );
+  }
   const uid = credential.user.uid;
   // Signing out the isolated provisioner is cleanup only. Do not block the
   // admin flow on Firebase persistence/network cleanup after the account exists.
