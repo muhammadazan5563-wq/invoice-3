@@ -4,10 +4,7 @@ import {
   collection,
   doc,
   getDocs,
-  limit,
-  query,
   setDoc,
-  where,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, firebaseConfig, storage } from './firebase';
@@ -60,6 +57,19 @@ export interface CreateContactResult {
 
 const CONTACTS_COLLECTION = 'contacts';
 const PROVISIONER_APP_NAME = 'contact-provisioner';
+const FIREBASE_OPERATION_TIMEOUT_MS = 20000;
+
+function withFirebaseTimeout<T>(operation: Promise<T>, message: string): Promise<T> {
+  return Promise.race([
+    operation,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error(`${message} timed out. Check your Firebase connection and try again.`)),
+        FIREBASE_OPERATION_TIMEOUT_MS
+      );
+    }),
+  ]);
+}
 
 function normalizeEmail(email: string): string {
   return (email || '').trim().toLowerCase();
@@ -98,7 +108,10 @@ function toContact(id: string, data: Record<string, any>): Contact {
 
 /** Every contact, newest first. Sorted client-side so no composite index is needed. */
 export async function getContacts(): Promise<Contact[]> {
-  const snapshot = await getDocs(collection(db, CONTACTS_COLLECTION));
+  const snapshot = await withFirebaseTimeout(
+    getDocs(collection(db, CONTACTS_COLLECTION)),
+    'Loading contacts'
+  );
   return snapshot.docs
     .map((entry) => toContact(entry.id, entry.data()))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -109,13 +122,10 @@ export async function getContactByEmail(email: string): Promise<Contact | null> 
   const target = normalizeEmail(email);
   if (!target) return null;
 
-  const snapshot = await getDocs(
-    query(collection(db, CONTACTS_COLLECTION), where('email', '==', target), limit(1))
-  );
-  if (snapshot.empty) return null;
-
-  const entry = snapshot.docs[0];
-  return toContact(entry.id, entry.data());
+  // Read the collection and normalize locally so records created before email
+  // normalization was introduced are still found during login and duplicate checks.
+  const contacts = await getContacts();
+  return contacts.find((contact) => normalizeEmail(contact.email) === target) || null;
 }
 
 async function uploadContactFile(uid: string, slot: string, file: File): Promise<string> {
@@ -136,9 +146,16 @@ async function provisionLogin(email: string, password: string): Promise<string> 
   const provisionerApp = existingApp || initializeApp(firebaseConfig, PROVISIONER_APP_NAME);
   const provisionerAuth = getAuth(provisionerApp);
 
-  const credential = await createUserWithEmailAndPassword(provisionerAuth, email, password);
+  const credential = await withFirebaseTimeout(
+    createUserWithEmailAndPassword(provisionerAuth, email, password),
+    'Creating the login account'
+  );
   const uid = credential.user.uid;
-  await signOut(provisionerAuth);
+  // Signing out the isolated provisioner is cleanup only. Do not block the
+  // admin flow on Firebase persistence/network cleanup after the account exists.
+  void signOut(provisionerAuth).catch((error) => {
+    console.warn('Could not clear the temporary Firebase auth session:', error);
+  });
   return uid;
 }
 
@@ -213,7 +230,10 @@ export async function createContact(
     createdAt: new Date().toISOString(),
   };
 
-  await setDoc(doc(db, CONTACTS_COLLECTION, uid), record);
+  await withFirebaseTimeout(
+    setDoc(doc(db, CONTACTS_COLLECTION, uid), record),
+    'Saving the contact record'
+  );
 
   return { contact: { id: uid, ...record }, password };
 }
