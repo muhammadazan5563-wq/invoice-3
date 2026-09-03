@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { Invoice } from '../types';
 
 const supabaseUrl =
-  (import.meta as any).env?.VITE_SUPABASE_URL || 'https://rfmdptajmsvsqkrikugy.supabase.co';
+  (import.meta as any).env?.VITE_SUPABASE_URL || 'https://jybjzbtgpnhkdyofayji.supabase.co';
 const supabaseKey =
   (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_GMAKWARwjUkSiWL4lHLBuA_DNVTcheD';
+  'sb_publishable_FDeECQfWSc89GcQVAUAhyA_QuEfE4AY';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -17,7 +17,7 @@ function rowToInvoice(row: any): Invoice {
     date: row.date,
     customerName: row.customer_name,
     customerEmail: row.customer_email || '',
-    hotelName: row.hotel_name || '',
+    customerPhone: row.customer_phone || '',
     totalAmount: Number(row.total_amount || 0),
     amountPaid: Number(row.amount_paid || 0),
     paymentDate: row.payment_date || '',
@@ -27,6 +27,7 @@ function rowToInvoice(row: any): Invoice {
     items: row.items || [],
     payments: row.payments || [],
     rawRow: [],
+    invoiceType: row.invoice_type || 'customer',
   };
 }
 
@@ -36,7 +37,7 @@ function invoiceToRow(invoice: Omit<Invoice, 'rowIndex' | 'rawRow'>) {
     date: invoice.date,
     customer_name: invoice.customerName,
     customer_email: invoice.customerEmail || '',
-    hotel_name: invoice.hotelName || '',
+    customer_phone: invoice.customerPhone || '',
     total_amount: Number(invoice.totalAmount || 0),
     amount_paid: Number(invoice.amountPaid || 0),
     payment_date: invoice.paymentDate || '',
@@ -45,7 +46,12 @@ function invoiceToRow(invoice: Omit<Invoice, 'rowIndex' | 'rawRow'>) {
     notes: invoice.notes || '',
     items: invoice.items || [],
     payments: invoice.payments || [],
+    invoice_type: invoice.invoiceType || 'customer',
   };
+}
+
+function mapInvoiceRows(data: any[]): Invoice[] {
+  return (data || []).map(rowToInvoice);
 }
 
 export async function getInvoices(): Promise<Invoice[]> {
@@ -58,12 +64,13 @@ export async function getInvoices(): Promise<Invoice[]> {
     throw new Error(error.message || 'Failed to load invoices from Supabase');
   }
 
-  return (data || []).map(rowToInvoice);
+  return mapInvoiceRows(data || []);
 }
 
 export async function createInvoice(invoice: Omit<Invoice, 'rowIndex' | 'rawRow'>): Promise<void> {
+  const table = invoice.invoiceType === 'vendor' ? 'vendor_invoices' : 'invoices';
   const { error } = await supabase
-    .from('invoices')
+    .from(table)
     .insert({ id: invoice.id, ...invoiceToRow(invoice) });
 
   if (error) {
@@ -75,19 +82,30 @@ export async function updateInvoice(
   id: string,
   invoice: Omit<Invoice, 'rowIndex' | 'rawRow'>
 ): Promise<void> {
-  const { error } = await supabase.from('invoices').update(invoiceToRow(invoice)).eq('id', id);
+  const table = invoice.invoiceType === 'vendor' ? 'vendor_invoices' : 'invoices';
+  const { error } = await supabase.from(table).update(invoiceToRow(invoice)).eq('id', id);
 
   if (error) {
     throw new Error(error.message || 'Failed to update invoice in Supabase');
   }
 }
 
-export async function deleteInvoice(id: string): Promise<void> {
-  const { error } = await supabase.from('invoices').delete().eq('id', id);
+export async function deleteInvoice(id: string, invoiceType: 'customer' | 'vendor' = 'customer'): Promise<void> {
+  const table = invoiceType === 'vendor' ? 'vendor_invoices' : 'invoices';
+  const { error } = await supabase.from(table).delete().eq('id', id);
 
   if (error) {
     throw new Error(error.message || 'Failed to delete invoice from Supabase');
   }
+}
+
+export async function getVendorInvoices(): Promise<Invoice[]> {
+  const { data, error } = await supabase
+    .from('vendor_invoices')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message || 'Failed to load vendor invoices from Supabase');
+  return mapInvoiceRows(data || []).map((invoice) => ({ ...invoice, invoiceType: 'vendor' }));
 }
 
 /**
