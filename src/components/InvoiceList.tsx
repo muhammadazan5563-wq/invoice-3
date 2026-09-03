@@ -578,22 +578,20 @@ export default function InvoiceList({ invoices, onEdit, onDelete, onMarkAsPaid, 
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="text-quill font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-3.5 px-4">Room</th>
-                      <th className="py-3.5 px-4 text-center">Qty</th>
-                      <th className="py-3.5 px-4 text-center">Check-in</th>
-                      <th className="py-3.5 px-4 text-center">Check-out</th>
-                      <th className="py-3.5 px-4 text-center">Nights</th>
-                      <th className="py-3.5 px-4 text-right">Price</th>
+                      <th className="py-3.5 px-4">Fish species</th>
+                      <th className="py-3.5 px-4">Description</th>
+                      <th className="py-3.5 px-4 text-center">Quantity kg</th>
+                      <th className="py-3.5 px-4 text-right">Rate per kg</th>
                       <th className="py-3.5 px-4 text-right">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="text-ink text-[12px]">
                     {selectedInvoice.items.length === 0 ? (
                       <tr className="bg-shell border-t-4 border-mist">
-                        <td colSpan={7} className="py-8 px-4 text-center">
+                        <td colSpan={6} className="py-8 px-4 text-center">
                           <p className="text-[12px] font-bold text-ink">No line items yet</p>
                           <p className="text-[11px] text-quill-soft mt-1 font-medium">
-                            Add rooms or services to build this invoice.
+                            Add fish species and quantities to build this invoice.
                           </p>
                         </td>
                       </tr>
@@ -601,19 +599,15 @@ export default function InvoiceList({ invoices, onEdit, onDelete, onMarkAsPaid, 
                       selectedInvoice.items.map((item, idx) => (
                         <tr key={idx} className="bg-shell border-t-4 border-mist">
                           <td className="py-3.5 px-4 font-bold">{item.roomType || 'Standard room'}</td>
-                          <td className="nums py-3.5 px-4 text-center font-semibold">{item.quantity}</td>
-                          <td className="nums py-3.5 px-4 text-center text-[11px] text-quill font-semibold">
-                            {item.checkIn || '—'}
-                          </td>
-                          <td className="nums py-3.5 px-4 text-center text-[11px] text-quill font-semibold">
-                            {item.checkOut || '—'}
-                          </td>
-                          <td className="nums py-3.5 px-4 text-center font-semibold">{item.nights}</td>
+                      <td className="py-3.5 px-4 text-[11px] text-quill font-semibold">
+                        {item.description || '—'}
+                      </td>
+                      <td className="nums py-3.5 px-4 text-center font-semibold">{item.quantity}</td>
                           <td className="nums py-3.5 px-4 text-right font-semibold">
                             {currencySymbol}{money(item.price)}
                           </td>
                           <td className="nums py-3.5 px-4 text-right font-bold">
-                            {currencySymbol}{money(item.total)}
+                            {currencySymbol}{money(item.quantity * item.price)}
                           </td>
                         </tr>
                       ))
