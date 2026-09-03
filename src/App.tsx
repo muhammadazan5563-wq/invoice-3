@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
-import { initAuth, googleSignIn, logout } from './lib/auth';
-import { saveFirebaseToken } from './lib/settings';
-import Dashboard from './components/Dashboard';
+import { useEffect, useState } from 'react';
 import {
-  Layers,
-  Users,
-  BarChart3,
+  AlertCircle,
   ArrowUpRight,
+  BarChart3,
+  Fish,
+  Layers,
   ShieldCheck,
-  Waves,
+  Users,
 } from 'lucide-react';
+import { Session, initAuth, logout } from './lib/auth';
+import Dashboard from './components/Dashboard';
+import PartnerPanel from './components/PartnerPanel';
+import SignInModal from './components/SignInModal';
 
 const BRAND_MARK =
   'https://mgx-backend-cdn.metadl.com/generate/images/1500378/2026-08-01/tumdfoacajra/logo-finnova-n-mark.png';
@@ -18,59 +19,36 @@ const WORKSPACE_IMAGE =
   'https://mgx-backend-cdn.metadl.com/generate/images/1500378/2026-08-01/tumdfbacajrq/card-workspace-desk-plant-lamp.png';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const unsubscribe = initAuth(
-      (currentUser, accessToken) => {
-        setUser(currentUser);
-        setToken(accessToken);
+      (nextSession) => {
+        setSession(nextSession);
+        setNotice('');
+        setShowSignIn(false);
         setAuthChecked(true);
       },
-      () => {
-        setUser(null);
-        setToken(null);
+      (reason) => {
+        setSession(null);
+        if (reason) setNotice(reason);
         setAuthChecked(true);
       }
     );
 
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, []);
-
-  const handleLogin = async () => {
-    setIsLoggingIn(true);
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        setUser(result.user);
-        setToken(result.accessToken);
-        try {
-          await saveFirebaseToken(result.user.uid, result.user.email || '', result.accessToken, '');
-        } catch (e) {
-          console.warn('Failed to persist token to Supabase:', e);
-        }
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const handleLogout = async () => {
     try {
       await logout();
-      setUser(null);
-      setToken(null);
-    } catch (err) {
-      console.error('Logout error:', err);
+    } finally {
+      setSession(null);
     }
   };
 
@@ -85,8 +63,17 @@ export default function App() {
     );
   }
 
-  if (user && token) {
-    return <Dashboard user={user} token={token} onLogout={handleLogout} />;
+  if (session) {
+    if (session.role === 'admin') {
+      return (
+        <Dashboard
+          user={session.user}
+          token={session.accessToken || ''}
+          onLogout={handleLogout}
+        />
+      );
+    }
+    return <PartnerPanel session={session} onLogout={handleLogout} />;
   }
 
   return (
@@ -97,19 +84,21 @@ export default function App() {
           <div className="flex items-center gap-2.5">
             <img src={BRAND_MARK} alt="" className="w-9 h-9 object-contain" />
             <div className="leading-none">
-              <span className="block text-[19px] font-extrabold tracking-tight text-ink font-display">FINNOVA</span>
+              <span className="block text-[19px] font-extrabold tracking-tight text-ink font-display">
+                AQUA LEDGER
+              </span>
               <span className="block text-[9px] font-semibold text-quill-soft mt-1">
-                Smart Finances, Better Business
+                Fish trading, fully accounted
               </span>
             </div>
           </div>
 
           <nav className="hidden lg:flex items-center gap-1 bg-ink rounded-full p-1.5">
-            {['Overview', 'Estimates', 'Invoices', 'Payments', 'Recurring'].map((label, i) => (
+            {['Overview', 'Purchases', 'Sales', 'Contacts'].map((label, index) => (
               <span
                 key={label}
                 className={`px-4 py-2.5 rounded-full text-[12px] font-bold ${
-                  i === 2 ? 'bg-brand text-white' : 'text-white/55'
+                  index === 0 ? 'bg-brand text-white' : 'text-white/55'
                 }`}
               >
                 {label}
@@ -119,69 +108,54 @@ export default function App() {
               href="/track"
               className="px-4 py-2.5 rounded-full text-[12px] font-bold text-white/55 hover:text-white transition-colors no-underline"
             >
-              Track Invoice
+              Track invoice
             </a>
           </nav>
 
           <button
             type="button"
-            onClick={handleLogin}
-            disabled={isLoggingIn}
-            className="bg-brand hover:bg-brand-mid disabled:opacity-60 disabled:pointer-events-none text-white text-[12px] font-bold px-5 py-3 rounded-full transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            onClick={() => setShowSignIn(true)}
+            className="bg-brand hover:bg-brand-mid text-white text-[12px] font-bold px-5 py-3 rounded-full transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
-            {isLoggingIn ? 'Connecting…' : 'Sign in'}
+            Sign in
           </button>
         </header>
+
+        {notice && (
+          <div className="mt-6 flex gap-3 items-start bg-[#fdf0ec] text-[#a8492f] px-5 py-4 rounded-[22px]">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p className="text-[12px] font-semibold leading-relaxed">{notice}</p>
+          </div>
+        )}
 
         {/* Hero */}
         <section className="mt-12 sm:mt-16 grid grid-cols-1 lg:grid-cols-5 gap-8 items-center" id="landing-hero">
           <div className="lg:col-span-3 space-y-6">
             <span className="inline-flex items-center gap-2 bg-brand-pale text-brand text-[10px] font-bold px-3.5 py-2 rounded-full uppercase tracking-wider">
-              <Waves className="w-3.5 h-3.5" /> Invoice ledger, reimagined
+              <Fish className="w-3.5 h-3.5" /> Vendors, customers and cash in one ledger
             </span>
 
             <h1 className="text-[42px] sm:text-[58px] leading-[1.03] font-extrabold tracking-tight text-ink font-display">
-              Every invoice, every payout —<br className="hidden sm:block" /> settled in one calm view.
+              Every catch bought,<br className="hidden sm:block" /> every crate sold, settled.
             </h1>
 
             <p className="text-[15px] text-quill leading-relaxed max-w-xl font-medium">
-              FINNOVA pairs a premium React interface with your Google Sheet or Supabase table. Track overdue balances,
-              watch collection speed, and settle invoices without leaving the dashboard.
+              Aqua Ledger keeps your fish trade honest: record what you buy from vendors, bill what you
+              sell to customers, and give both sides their own portal to check exactly where they stand.
             </p>
 
-            <div className="flex flex-wrap items-center gap-4 pt-2" id="google-login-action-box">
+            <div className="flex flex-wrap items-center gap-4 pt-2">
               <button
                 type="button"
-                onClick={handleLogin}
-                disabled={isLoggingIn}
-                className="gsi-material-button"
+                onClick={() => setShowSignIn(true)}
+                className="bg-ink hover:bg-ink-2 text-white text-[13px] font-bold px-6 py-3.5 rounded-full transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
-                <div className="gsi-material-button-state" />
-                <div className="gsi-material-button-content-wrapper">
-                  <div className="gsi-material-button-icon">
-                    <svg
-                      version="1.1"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 48 48"
-                      xmlnsXlink="http://www.w3.org/1999/xlink"
-                      style={{ display: 'block' }}
-                    >
-                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                      <path fill="none" d="M0 0h48v48H0z" />
-                    </svg>
-                  </div>
-                  <span className="gsi-material-button-contents">
-                    {isLoggingIn ? 'Connecting…' : 'Continue with Google'}
-                  </span>
-                </div>
+                Sign in to your panel
               </button>
 
-              <span className="flex items-center gap-2 text-[11px] text-quill-soft font-semibold max-w-[220px] leading-relaxed">
+              <span className="flex items-center gap-2 text-[11px] text-quill-soft font-semibold max-w-[240px] leading-relaxed">
                 <ShieldCheck className="w-4 h-4 text-brand shrink-0" />
-                Read and append access to your spreadsheet only.
+                Administrators use Google. Vendors and customers use their issued password.
               </span>
             </div>
 
@@ -191,7 +165,7 @@ export default function App() {
                 className="inline-flex items-center gap-2 bg-mist hover:bg-mist-2 border border-hairline text-ink text-[12px] font-bold px-5 py-3 rounded-full transition-colors no-underline"
               >
                 <Layers className="w-3.5 h-3.5 text-brand" />
-                Track Your Invoice
+                Track an invoice
               </a>
               <span className="text-[11px] text-quill-soft font-medium">No login required</span>
             </div>
@@ -200,17 +174,19 @@ export default function App() {
           {/* Preview stack */}
           <div className="lg:col-span-2 space-y-3">
             <div className="bg-ink rounded-[26px] p-5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-white/50">Balance due</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/50">
+                Outstanding to collect
+              </span>
               <div className="nums text-[30px] font-extrabold text-white font-display mt-2 leading-none">
-                $47,980.00
+                ₨ 4,798,000
               </div>
               <div className="grid grid-cols-3 gap-2 mt-5">
-                {['UI/UX', 'Dev', 'QA'].map((l, i) => (
-                  <div key={l} className={`rounded-[14px] p-3 ${i === 1 ? 'bg-brand' : 'bg-white/10'}`}>
+                {['Vendors', 'Customers', 'Cash'].map((label, index) => (
+                  <div key={label} className={`rounded-[14px] p-3 ${index === 1 ? 'bg-brand' : 'bg-white/10'}`}>
                     <span className="nums block text-[12px] font-bold text-white">
-                      ${[15990, 21250, 10740][i].toLocaleString()}
+                      {[159, 212, 107][index]}
                     </span>
-                    <span className="block text-[9px] text-white/55 font-semibold mt-1">{l}</span>
+                    <span className="block text-[9px] text-white/55 font-semibold mt-1">{label}</span>
                   </div>
                 ))}
               </div>
@@ -218,53 +194,59 @@ export default function App() {
 
             <div className="bg-mist rounded-[26px] p-2.5">
               <div className="h-[132px] rounded-[20px] overflow-hidden">
-                <img src={WORKSPACE_IMAGE} alt="Desk with laptop, plant and lamp" className="w-full h-full object-cover" />
+                <img
+                  src={WORKSPACE_IMAGE}
+                  alt="Desk with laptop, plant and lamp"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="flex items-center justify-between px-3 py-3">
-                <span className="text-[11px] font-bold text-ink">Average time to get paid</span>
+                <span className="text-[11px] font-bold text-ink">Average days to settle</span>
                 <span className="nums flex items-center gap-1 text-[12px] font-extrabold text-brand">
-                  16 days <ArrowUpRight className="w-3.5 h-3.5" />
+                  9 days <ArrowUpRight className="w-3.5 h-3.5" />
                 </span>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Benefits */}
-        <section className="mt-16 sm:mt-20" id="landing-benefits">
+        {/* Panels */}
+        <section className="mt-16 sm:mt-20" id="landing-panels">
           <h2 className="text-[11px] font-bold text-quill-soft uppercase tracking-wider mb-6">
-            Why teams run billing on FINNOVA
+            Three panels, one source of truth
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <article className="bg-mist rounded-[24px] p-6 md:row-span-1">
+            <article className="bg-mist rounded-[24px] p-6">
               <span className="w-11 h-11 rounded-2xl bg-brand-pale flex items-center justify-center">
-                <Layers className="w-5 h-5 text-brand" />
+                <BarChart3 className="w-5 h-5 text-brand" />
               </span>
-              <h3 className="text-[15px] font-extrabold text-ink font-display mt-4">Two backends, one view</h3>
+              <h3 className="text-[15px] font-extrabold text-ink font-display mt-4">Admin panel</h3>
               <p className="text-[12px] text-quill leading-relaxed mt-2 font-medium">
-                Your billing team can type straight into the spreadsheet while clients see a polished interface. Supabase
-                keeps the source of truth consistent.
+                The full picture: dashboard, analytics, the invoice ledger, contacts and settings. Signed
+                in with your Google account.
               </p>
             </article>
 
             <article className="bg-ink rounded-[24px] p-6">
               <span className="w-11 h-11 rounded-2xl bg-white/12 flex items-center justify-center">
-                <Users className="w-5 h-5 text-brand-soft" />
+                <Fish className="w-5 h-5 text-brand-soft" />
               </span>
-              <h3 className="text-[15px] font-extrabold text-white font-display mt-4">Collaborative by default</h3>
+              <h3 className="text-[15px] font-extrabold text-white font-display mt-4">Vendor panel</h3>
               <p className="text-[12px] text-white/60 leading-relaxed mt-2 font-medium">
-                Multiple editors, instant reads. Whoever updates a booking, the dashboard reflects it on the next sync.
+                Suppliers sign in with the email and password you issue, then see their dashboard and
+                every invoice raised against their supply.
               </p>
             </article>
 
             <article className="bg-mist rounded-[24px] p-6">
               <span className="w-11 h-11 rounded-2xl bg-brand-pale flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-brand" />
+                <Users className="w-5 h-5 text-brand" />
               </span>
-              <h3 className="text-[15px] font-extrabold text-ink font-display mt-4">Analytics that answer</h3>
+              <h3 className="text-[15px] font-extrabold text-ink font-display mt-4">Customer panel</h3>
               <p className="text-[12px] text-quill leading-relaxed mt-2 font-medium">
-                Overdue exposure, collection speed, top accounts and monthly revenue — all computed from your live rows.
+                Buyers get the same clean view of their own invoices — what was billed, what they paid,
+                and what is still due.
               </p>
             </article>
           </div>
@@ -272,16 +254,31 @@ export default function App() {
 
         <footer className="mt-14 pt-6 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
           <span className="text-[11px] font-semibold text-quill-soft">
-            FINNOVA © 2026 · Built with React, Tailwind and Supabase
+            AQUA LEDGER © 2026 · Fish trading invoices
           </span>
           <div className="flex items-center gap-4">
-            <a href="/track" className="text-[11px] font-bold text-brand hover:text-brand-mid no-underline transition-colors">
-              Track Invoice
+            <a
+              href="/track"
+              className="text-[11px] font-bold text-brand hover:text-brand-mid no-underline transition-colors"
+            >
+              Track invoice
             </a>
-            <span className="text-[11px] font-semibold text-quill-soft">Smart Finances, Better Business</span>
+            <span className="text-[11px] font-semibold text-quill-soft">
+              Fish trading, fully accounted
+            </span>
           </div>
         </footer>
       </div>
+
+      <SignInModal
+        open={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        onSignedIn={(nextSession) => {
+          setSession(nextSession);
+          setShowSignIn(false);
+          setNotice('');
+        }}
+      />
     </div>
   );
 }
