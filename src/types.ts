@@ -1,11 +1,12 @@
 export interface BookingItem {
-  roomType: string;      // Room column, e.g., 'AVG 4.5'
-  quantity: number;      // QUANTITY column, e.g., 4
+  roomType: string;      // Fish species (kept for backwards compatibility)
+  quantity: number;      // Quantity in kilograms
   checkIn: string;       // CHECK-IN column, e.g., '2026-07-18'
   checkOut: string;      // CHECK-OUT column, e.g., '2026-07-20'
-  nights: number;        // NIGHTS column, e.g., 2
-  price: number;         // PRICE column, e.g., 50.00
-  total: number;         // TOTAL AMOUNT column, e.g., 400.00 (quantity * nights * price)
+  nights: number;        // Legacy field; fishery invoices use 1
+  price: number;         // Rate per kilogram
+  total: number;         // quantity * price
+  description?: string;
 }
 
 export interface PaymentRecord {
@@ -19,7 +20,9 @@ export interface Invoice {
   date: string;          // Date
   customerName: string;  // Customer Name, e.g., 'FAIZ'
   customerEmail: string; // Customer Email
-  hotelName: string;     // Hotel Name
+  customerPhone?: string;
+  /** Legacy spreadsheet-only field; never sent to Supabase invoice tables. */
+  hotelName?: string;
   totalAmount: number;   // Total Amount, e.g., 1600.00
   amountPaid: number;    // Amount Paid, e.g., 600.00
   paymentDate: string;   // Payment Date, e.g., '2026-07-18'
@@ -28,6 +31,7 @@ export interface Invoice {
   notes: string;         // Notes & Banking details
   items: BookingItem[];  // Parsed from cell or stored as JSON string
   payments: PaymentRecord[]; // List of detailed payments
+  invoiceType?: 'customer' | 'vendor';
   rawRow: string[];      // Copy of original raw row values
 }
 
