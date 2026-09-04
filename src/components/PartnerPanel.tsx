@@ -30,7 +30,6 @@ type PanelView = 'dashboard' | 'invoices';
 
 const CURRENCY = 'PKR';
 
-const normalizePhone = (value: string) => value.replace(/[^\d+]/g, '').replace(/^00/, '+');
 const money = (value: number) => formatCurrency(value, CURRENCY);
 
 /**
@@ -59,21 +58,11 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
     setError('');
     try {
       const all = role === 'vendor' ? await getVendorInvoices() : await getInvoices();
-      const email = (contact?.email || session.user.email || '').trim().toLowerCase();
-      const name = (contact?.fullName || '').trim().toLowerCase();
-      const phone = normalizePhone(contact?.phone || '');
+      const customerId = (contact?.id || '').trim();
 
-      // Customer accounts are identified by name + phone when both are recorded.
-      // Email remains a compatibility fallback for older contacts/invoices.
+      // Customer ID is the sole ownership key. Never fall back to name, phone, or email.
       setInvoices(
-        all.filter((invoice) => {
-          const invoiceEmail = (invoice.customerEmail || '').trim().toLowerCase();
-          const invoiceName = (invoice.customerName || '').trim().toLowerCase();
-          const invoicePhone = normalizePhone(invoice.customerPhone || '');
-          const matchesNameAndPhone = Boolean(name && phone && invoiceName === name && invoicePhone === phone);
-          const matchesLegacyIdentity = Boolean(email && invoiceEmail && invoiceEmail === email);
-          return matchesNameAndPhone || (!phone && name === invoiceName) || matchesLegacyIdentity;
-        })
+        customerId ? all.filter((invoice) => invoice.customerId === customerId) : []
       );
     } catch (err: any) {
       setError(err?.message || 'Could not load your invoices right now.');
