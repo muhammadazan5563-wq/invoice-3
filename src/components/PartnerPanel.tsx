@@ -47,6 +47,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
     searchParams.get('panel') === 'invoices' ? 'invoices' : 'dashboard'
   );
   const [search, setSearch] = useState('');
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   useEffect(() => {
     loadInvoices();
@@ -143,27 +144,49 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
             ))}
           </nav>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="relative shrink-0">
             <button
               type="button"
-              onClick={loadInvoices}
-              disabled={loading}
-              title="Refresh"
-              className="w-10 h-10 rounded-full bg-mist hover:bg-mist-2 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              onClick={() => setActionsOpen((open) => !open)}
+              aria-expanded={actionsOpen}
+              aria-controls="partner-actions-menu"
+              title="Open account actions"
+              className="w-11 h-11 rounded-full bg-brand-soft flex items-center justify-center text-white text-[12px] font-bold shadow-[0_8px_18px_-10px_rgba(92,72,214,0.8)] transition-transform duration-200 hover:scale-105 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
-              <RefreshCw className={`w-4 h-4 text-ink ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <div className="w-10 h-10 rounded-full bg-brand-soft flex items-center justify-center text-white text-[12px] font-bold">
               {initials || 'U'}
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Sign out"
-              className="w-9 h-9 rounded-full hover:bg-mist flex items-center justify-center transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              <LogOut className="w-4 h-4 text-quill" />
             </button>
+
+            <div
+              id="partner-actions-menu"
+              className={`absolute right-0 top-[calc(100%+10px)] z-20 flex flex-col items-center gap-2 transition-all duration-200 origin-top ${
+                actionsOpen
+                  ? 'visible translate-y-0 opacity-100'
+                  : 'invisible -translate-y-2 opacity-0 pointer-events-none'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  loadInvoices();
+                  setActionsOpen(false);
+                }}
+                disabled={loading}
+                title="Refresh invoices"
+                aria-label="Refresh invoices"
+                className="w-10 h-10 rounded-full bg-mist hover:bg-mist-2 disabled:opacity-50 flex items-center justify-center shadow-[0_8px_18px_-12px_rgba(19,17,38,0.55)] transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                <RefreshCw className={`w-4 h-4 text-ink ${loading ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Sign out"
+                aria-label="Sign out"
+                className="w-10 h-10 rounded-full bg-shell hover:bg-mist flex items-center justify-center shadow-[0_8px_18px_-12px_rgba(19,17,38,0.55)] transition-colors duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                <LogOut className="w-4 h-4 text-quill" />
+              </button>
+            </div>
           </div>
         </header>
 
