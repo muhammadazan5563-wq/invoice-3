@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || "https://jybjzbtgpnhkdyofayji.supabase.co";
+const supabaseUrl = process.env.SUPABASE_URL || "https://rfmdptajmsvsqkrikugy.supabase.co";
 // Use the publishable/anon key - the secret key was invalid ("Unregistered API key")
 // The anon key works for public reads with proper RLS policies
-const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || "sb_publishable_FDeECQfWSc89GcQVAUAhyA_QuEfE4AY";
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || "sb_publishable_GMAKWARwjUkSiWL4lHLBuA_DNVTcheD";
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },
