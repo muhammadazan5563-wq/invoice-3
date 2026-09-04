@@ -54,9 +54,10 @@ app.get("/api/invoices", async (req, res) => {
       rowIndex: 0, // Not strictly needed for database row access, but kept for TS interface compatibility
       id: row.id,
       date: row.date,
-      customerName: row.customer_name,
+      customerName: row.customer_name || "",
+      customerId: row.customer_id || "",
       customerEmail: row.customer_email || "",
-      hotelName: row.hotel_name || "",
+      customerPhone: row.customer_phone || "",
       totalAmount: Number(row.total_amount || 0),
       amountPaid: Number(row.amount_paid || 0),
       paymentDate: row.payment_date || "",
@@ -64,7 +65,8 @@ app.get("/api/invoices", async (req, res) => {
       status: row.status || "Pending",
       notes: row.notes || "",
       items: row.items || [],
-      payments: row.payments || []
+      payments: row.payments || [],
+      invoiceType: row.invoice_type || "customer"
     }));
 
     res.json(invoices);
@@ -78,8 +80,8 @@ app.get("/api/invoices", async (req, res) => {
 app.post("/api/invoices", async (req, res) => {
   try {
     const inv = req.body;
-    if (!inv.id || !inv.date || !inv.customerName) {
-      return res.status(400).json({ error: "Missing required invoice fields (id, date, customerName)" });
+    if (!inv.id || !inv.date || !inv.customerName || !inv.customerId) {
+      return res.status(400).json({ error: "Missing required invoice fields (id, date, customerName, customerId)" });
     }
 
     const { data, error } = await supabase
@@ -88,8 +90,9 @@ app.post("/api/invoices", async (req, res) => {
         id: inv.id,
         date: inv.date,
         customer_name: inv.customerName,
+        customer_id: inv.customerId,
         customer_email: inv.customerEmail || "",
-        hotel_name: inv.hotelName || "",
+        customer_phone: inv.customerPhone || "",
         total_amount: Number(inv.totalAmount || 0),
         amount_paid: Number(inv.amountPaid || 0),
         payment_date: inv.paymentDate || "",
@@ -117,14 +120,18 @@ app.put("/api/invoices/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const inv = req.body;
+    if (!inv.customerId) {
+      return res.status(400).json({ error: "customerId is required" });
+    }
 
     const { data, error } = await supabase
       .from("invoices")
       .update({
         date: inv.date,
         customer_name: inv.customerName,
+        customer_id: inv.customerId || "",
         customer_email: inv.customerEmail || "",
-        hotel_name: inv.hotelName || "",
+        customer_phone: inv.customerPhone || "",
         total_amount: Number(inv.totalAmount || 0),
         amount_paid: Number(inv.amountPaid || 0),
         payment_date: inv.paymentDate || "",
@@ -508,15 +515,17 @@ app.get("/api/public-invoice/:id", async (req, res) => {
     const invoice = {
       id: data.id,
       date: data.date,
-      customerName: data.customer_name,
+      customerName: data.customer_name || "",
+      customerId: data.customer_id || "",
       customerEmail: data.customer_email || "",
-      hotelName: data.hotel_name || "",
+      customerPhone: data.customer_phone || "",
       totalAmount: Number(data.total_amount || 0),
       amountPaid: Number(data.amount_paid || 0),
       paymentDate: data.payment_date || "",
       balance: Number(data.balance || 0),
       status: data.status || "Pending",
       notes: data.notes || "",
+      invoiceType: data.invoice_type || "customer",
       items: data.items || [],
       payments: data.payments || [],
     };
@@ -525,144 +534,6 @@ app.get("/api/public-invoice/:id", async (req, res) => {
   } catch (error: any) {
     console.error("Error in GET /api/public-invoice:", error);
     res.status(500).json({ error: error.message || "Failed to fetch invoice" });
-  }
-});
-
-// GET /api/lookup-invoice/:invoiceNumber - Public endpoint to lookup invoice from MASTER sheet
-app.get("/api/lookup-invoice/:invoiceNumber", async (req, res) => {
-  try {
-    const { invoiceNumber } = req.params;
-    if (!invoiceNumber || !invoiceNumber.trim()) {
-      return res.status(400).json({ error: "Invoice number is required" });
-    }
-
-    // Normalize the invoice number - strip common prefixes so we can match REF-{number}
-    let cleanNumber = invoiceNumber.trim();
-    if (cleanNumber.toUpperCase().startsWith("REF-")) {
-      cleanNumber = cleanNumber.substring(4);
-    }
-    if (cleanNumber.toUpperCase().startsWith("INV-")) {
-      cleanNumber = cleanNumber.substring(4);
-    }
-
-    // Hardcoded spreadsheet configuration
-    const spreadsheetId = "1pxQgtpDyOj0GK0y9A2yIl0xp73fZfY1HG53VPkgS5rA";
-    const sheetName = "MASTER";
-
-    let allRows: string[][] = [];
-
-    // Strategy 1: Try with OAuth token from database
-    const { data: settingsData } = await supabase
-      .from("user_settings")
-      .select("firebase_token")
-      .limit(1)
-      .single();
-
-    const accessToken = settingsData?.firebase_token || null;
-    const sheetRange = encodeURIComponent(`'${sheetName}'!A:J`);
-
-    if (accessToken) {
-      const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange}`;
-      const sheetResponse = await fetch(readUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (sheetResponse.ok) {
-        const sheetData = await sheetResponse.json();
-        allRows = sheetData.values || [];
-      } else {
-        console.error("[lookup-invoice] OAuth token failed:", sheetResponse.status);
-      }
-    }
-
-    // Strategy 2: If OAuth failed or no token, try Google Visualization API (works for publicly shared sheets)
-    if (allRows.length === 0) {
-      const gvizUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-      const gvizResponse = await fetch(gvizUrl);
-
-      if (gvizResponse.ok) {
-        const gvizText = await gvizResponse.text();
-        // Google Visualization API returns JSONP-like: google.visualization.Query.setResponse({...})
-        const jsonMatch = gvizText.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
-        if (jsonMatch) {
-          const gvizData = JSON.parse(jsonMatch[1]);
-          const table = gvizData.table;
-          if (table && table.rows) {
-            const headerRow = table.cols.map((c: any) => c.label || "");
-            const dataRows = table.rows.map((r: any) =>
-              r.c.map((cell: any) => (cell && cell.v != null) ? String(cell.v) : "")
-            );
-            allRows = [headerRow, ...dataRows];
-          }
-        }
-      } else {
-        console.error("[lookup-invoice] Google Visualization API failed:", gvizResponse.status);
-      }
-    }
-
-    // Strategy 3: If still no data, try with API key (if configured)
-    if (allRows.length === 0) {
-      const googleApiKey = process.env.GOOGLE_API_KEY || "";
-      if (googleApiKey) {
-        const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange}?key=${googleApiKey}`;
-        const sheetResponse = await fetch(readUrl);
-        if (sheetResponse.ok) {
-          const sheetData = await sheetResponse.json();
-          allRows = sheetData.values || [];
-        }
-      }
-    }
-
-    if (allRows.length === 0) {
-      return res.status(500).json({ error: "Unable to access the spreadsheet. Please ensure the sheet is shared publicly (Anyone with the link can view)." });
-    }
-
-    // Filter rows where column J (index 9) matches "REF-" + cleanNumber
-    const refValue = `REF-${cleanNumber}`;
-    const matchingRows: any[] = [];
-    let totalDue = 0;
-
-    for (let i = 1; i < allRows.length; i++) {
-      const row = allRows[i];
-      if (!row || row.length === 0) continue;
-
-      // Column J is index 9 (REF#)
-      const refCol = (row[9] || "").trim();
-      if (refCol === refValue) {
-        matchingRows.push({
-          room: row[0] || "",
-          checkIn: row[1] || "",
-          checkout: row[2] || "",
-          nights: parseInt(row[3]) || 0,
-          roomPrice: parseFloat(row[4]) || 0,
-          total: parseFloat(row[5]) || 0,
-          sum: parseFloat(row[6]) || 0,
-          due: parseFloat(row[7]) || 0,
-          group: row[8] || "",
-          ref: row[9] || "",
-        });
-        totalDue += parseFloat(row[7]) || 0;
-      }
-    }
-
-    // Calculate grand total
-    let grandTotal = 0;
-    for (const row of matchingRows) {
-      grandTotal += row.total;
-    }
-
-    res.json({
-      invoiceNumber: cleanNumber,
-      refValue,
-      group: matchingRows.length > 0 ? matchingRows[0].group : "",
-      rows: matchingRows,
-      totalAmount: grandTotal,
-      totalDue,
-      headers: ["Room", "Check In", "Checkout", "Nights", "Room Price", "Total", "Sum", "DUE", "GROUP", "REF#"],
-    });
-  } catch (error: any) {
-    console.error("Error in GET /api/lookup-invoice:", error);
-    res.status(500).json({ error: error.message || "Failed to lookup invoice" });
   }
 });
 
