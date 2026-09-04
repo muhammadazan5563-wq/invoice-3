@@ -54,7 +54,7 @@ export default function InvoiceLookup() {
               Track Your Invoice
             </h1>
             <p className="text-[14px] text-quill leading-relaxed mt-3 max-w-md mx-auto font-medium">
-              Enter your invoice number below to view booking details, payment status, and outstanding balance.
+              Enter your invoice number below to view fishery details, payment status, and outstanding balance.
             </p>
           </div>
 
@@ -113,7 +113,7 @@ export default function InvoiceLookup() {
               </span>
               <h3 className="text-[13px] font-bold text-ink">Real-time Status</h3>
               <p className="text-[11px] text-quill leading-relaxed mt-1.5 font-medium">
-                See your booking details, room allocations, payment history, and remaining balance — all live.
+                See your fishery lines, quantities, payment history, and remaining balance — all live.
               </p>
             </div>
           </div>
