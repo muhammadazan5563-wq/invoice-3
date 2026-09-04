@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || "https://rfmdptajmsvsqkrikugy.supabase.co";
+const supabaseUrl = process.env.SUPABASE_URL || "https://jybjzbtgpnhkdyofayji.supabase.co";
 // Use the publishable/anon key - the secret key was invalid ("Unregistered API key")
 // The anon key works for public reads with proper RLS policies
-const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || "sb_publishable_GMAKWARwjUkSiWL4lHLBuA_DNVTcheD";
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || "sb_publishable_FDeECQfWSc89GcQVAUAhyA_QuEfE4AY";
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },
@@ -25,28 +25,37 @@ export default async function handler(req, res) {
   try {
     // GET /api/debug - Diagnostic endpoint to verify Supabase connection
     if (path === "/api/debug" && method === "GET") {
-      const { data, error, count } = await supabase
-        .from("invoices")
-        .select("id", { count: "exact" });
+      const [{ data: customerRows, error: customerError }, { data: vendorRows, error: vendorError }] = await Promise.all([
+        supabase.from("invoices").select("id"),
+        supabase.from("vendor_invoices").select("id"),
+      ]);
+      const data = [...(customerRows || []), ...(vendorRows || [])];
+      const error = customerError || vendorError;
       
       return res.status(200).json({
         supabase_url: supabaseUrl,
         key_prefix: supabaseKey ? supabaseKey.substring(0, 15) + "..." : "MISSING",
         connection: error ? "FAILED" : "OK",
         error: error ? error.message : null,
-        invoice_count: data ? data.length : 0,
-        invoice_ids: data ? data.map((r) => r.id) : [],
+        invoice_count: data.length,
+        invoice_ids: data.map((r) => r.id),
       });
     }
 
     // GET /api/invoices
     if (path === "/api/invoices" && method === "GET") {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const [{ data: customerRows, error: customerError }, { data: vendorRows, error: vendorError }] = await Promise.all([
+        supabase.from("invoices").select("*"),
+        supabase.from("vendor_invoices").select("*"),
+      ]);
+      if (customerError) throw customerError;
+      if (vendorError) throw vendorError;
+      const data = [
+        ...(customerRows || []).map((row) => ({ ...row, invoice_type: row.invoice_type || "customer" })),
+        ...(vendorRows || []).map((row) => ({ ...row, invoice_type: "vendor" })),
+      ].sort(
+        (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+      );
 
       const invoices = (data || []).map((row) => ({
         rowIndex: 0,
@@ -358,10 +367,17 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Invoice ID is required" });
       }
 
-      // Fetch ALL invoices and do flexible matching (most reliable approach)
-      const { data: allInvoices, error: fetchAllError } = await supabase
-        .from("invoices")
-        .select("*");
+      // Fetch both invoice tables and do flexible matching. Both tables share
+      // the same schema; invoice_type identifies the source in the response.
+      const [{ data: customerInvoices, error: customerError }, { data: vendorInvoices, error: vendorError }] = await Promise.all([
+        supabase.from("invoices").select("*"),
+        supabase.from("vendor_invoices").select("*"),
+      ]);
+      const allInvoices = [
+        ...(customerInvoices || []).map((invoice) => ({ ...invoice, invoice_type: invoice.invoice_type || "customer" })),
+        ...(vendorInvoices || []).map((invoice) => ({ ...invoice, invoice_type: "vendor" })),
+      ];
+      const fetchAllError = customerError || vendorError;
 
       if (fetchAllError) {
         console.error("[public-invoice] Supabase error:", fetchAllError);
