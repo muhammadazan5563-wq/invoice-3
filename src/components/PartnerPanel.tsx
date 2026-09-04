@@ -12,6 +12,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Invoice } from '../types';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Session } from '../lib/auth';
 import { getInvoices, getVendorInvoices } from '../lib/supabase';
 import { formatCurrency } from '../lib/settings';
@@ -29,6 +30,7 @@ type PanelView = 'dashboard' | 'invoices';
 
 const CURRENCY = 'PKR';
 
+const normalizePhone = (value: string) => value.replace(/[^\d+]/g, '').replace(/^00/, '+');
 const money = (value: number) => formatCurrency(value, CURRENCY);
 
 /**
@@ -37,10 +39,14 @@ const money = (value: number) => formatCurrency(value, CURRENCY);
  */
 export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
   const { contact, role } = session;
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [view, setView] = useState<PanelView>('dashboard');
+  const [view, setView] = useState<PanelView>(() =>
+    searchParams.get('panel') === 'invoices' ? 'invoices' : 'dashboard'
+  );
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -53,17 +59,20 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
     setError('');
     try {
       const all = role === 'vendor' ? await getVendorInvoices() : await getInvoices();
-      const email = (contact?.email || session.user.email || '').toLowerCase();
+      const email = (contact?.email || session.user.email || '').trim().toLowerCase();
       const name = (contact?.fullName || '').trim().toLowerCase();
+      const phone = normalizePhone(contact?.phone || '');
 
-      // Match on email first; fall back to the customer name recorded on the invoice.
+      // Customer accounts are identified by name + phone when both are recorded.
+      // Email remains a compatibility fallback for older contacts/invoices.
       setInvoices(
         all.filter((invoice) => {
           const invoiceEmail = (invoice.customerEmail || '').trim().toLowerCase();
           const invoiceName = (invoice.customerName || '').trim().toLowerCase();
-          if (email && invoiceEmail && invoiceEmail === email) return true;
-          if (name && invoiceName && invoiceName === name) return true;
-          return false;
+          const invoicePhone = normalizePhone(invoice.customerPhone || '');
+          const matchesNameAndPhone = Boolean(name && phone && invoiceName === name && invoicePhone === phone);
+          const matchesLegacyIdentity = Boolean(email && invoiceEmail && invoiceEmail === email);
+          return matchesNameAndPhone || (!phone && name === invoiceName) || matchesLegacyIdentity;
         })
       );
     } catch (err: any) {
@@ -419,12 +428,15 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
                           {money(invoice.balance)}
                         </span>
                       </div>
-                      <a
-                        href={`/invoice/${encodeURIComponent(invoice.id)}`}
-                        className="inline-flex items-center gap-1.5 bg-ink hover:bg-ink-2 text-white text-[11px] font-bold px-4 py-2.5 rounded-full no-underline transition-colors duration-200"
-                      >
-                        <Wallet className="w-3.5 h-3.5" /> Open
-                      </a>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/invoice/${encodeURIComponent(invoice.id)}`, {
+                            state: { returnTo: '/?panel=invoices' },
+                          })}
+                          className="inline-flex items-center justify-center bg-ink text-white text-[11px] font-bold px-4 py-2.5 rounded-full hover:bg-ink-2 transition-colors no-underline"
+                        >
+                          Open invoice
+                        </button>
                     </div>
                   </article>
                 ))}
