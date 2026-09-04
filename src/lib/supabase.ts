@@ -16,6 +16,7 @@ function rowToInvoice(row: any): Invoice {
     id: row.id,
     date: row.date,
     customerName: row.customer_name,
+    customerId: row.customer_id || '',
     customerEmail: row.customer_email || '',
     customerPhone: row.customer_phone || '',
     totalAmount: Number(row.total_amount || 0),
@@ -36,6 +37,7 @@ function invoiceToRow(invoice: Omit<Invoice, 'rowIndex' | 'rawRow'>) {
   return {
     date: invoice.date,
     customer_name: invoice.customerName,
+    customer_id: invoice.customerId || '',
     customer_email: invoice.customerEmail || '',
     customer_phone: invoice.customerPhone || '',
     total_amount: Number(invoice.totalAmount || 0),
