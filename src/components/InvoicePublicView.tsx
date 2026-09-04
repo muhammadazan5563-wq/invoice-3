@@ -18,8 +18,10 @@ import {
 const BRAND_MARK =
   'https://mgx-backend-cdn.metadl.com/generate/images/1500378/2026-08-01/tumdfoacajra/logo-finnova-n-mark.png';
 
-interface BookingItem {
-  roomType: string;
+interface FisheryItem {
+  roomType?: string;
+  fishSpecies?: string;
+  description?: string;
   quantity: number;
   checkIn: string;
   checkOut: string;
@@ -33,28 +35,27 @@ interface InvoiceRecord {
   date: string;
   customerName: string;
   customerEmail: string;
-  hotelName: string;
   totalAmount: number;
   amountPaid: number;
   paymentDate: string;
   balance: number;
   status: string;
   notes: string;
-  items: BookingItem[];
+  items: FisheryItem[];
   payments: { amount: number; date: string }[];
 }
 
 interface SpreadsheetRow {
-  room: string;
-  checkIn: string;
-  checkout: string;
-  nights: number;
-  roomPrice: number;
-  total: number;
-  sum: number;
+  fishSpecies: string;
+  description: string;
+  quantityKg: number;
+  ratePerKg: number;
+  amount: number;
+  paid: number;
   due: number;
-  group: string;
-  ref: string;
+  customer: string;
+  reference: string;
+  values?: string[];
 }
 
 interface SpreadsheetData {
@@ -266,12 +267,6 @@ export default function InvoicePublicView() {
                   {invoice.customerEmail && (
                     <div className="text-[12px] text-quill font-semibold">{invoice.customerEmail}</div>
                   )}
-                  {invoice.hotelName && (
-                    <div className="text-[12px] text-quill font-semibold">
-                      <span className="text-quill-soft">Property: </span>
-                      {invoice.hotelName}
-                    </div>
-                  )}
                 </div>
 
                 <div className="bg-brand text-white rounded-[18px] overflow-hidden flex min-w-[240px]">
@@ -292,27 +287,19 @@ export default function InvoicePublicView() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="text-quill font-bold text-[10px] uppercase tracking-wider">
-                        <th className="py-3.5 px-4">Room</th>
-                        <th className="py-3.5 px-4 text-center">Qty</th>
-                        <th className="py-3.5 px-4 text-center">Check-in</th>
-                        <th className="py-3.5 px-4 text-center">Check-out</th>
-                        <th className="py-3.5 px-4 text-center">Nights</th>
-                        <th className="py-3.5 px-4 text-right">Price</th>
+                        <th className="py-3.5 px-4">Fish species</th>
+                        <th className="py-3.5 px-4">Description</th>
+                        <th className="py-3.5 px-4 text-center">Quantity (kg)</th>
+                        <th className="py-3.5 px-4 text-right">Rate / kg</th>
                         <th className="py-3.5 px-4 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="text-ink text-[12px]">
                       {invoice.items.map((item, idx) => (
                         <tr key={idx} className="bg-shell border-t-4 border-mist">
-                          <td className="py-3.5 px-4 font-bold">{item.roomType || 'Standard room'}</td>
+                          <td className="py-3.5 px-4 font-bold">{item.fishSpecies || item.roomType || '—'}</td>
+                          <td className="py-3.5 px-4 text-quill">{item.description || '—'}</td>
                           <td className="nums py-3.5 px-4 text-center font-semibold">{item.quantity}</td>
-                          <td className="nums py-3.5 px-4 text-center text-[11px] text-quill font-semibold">
-                            {item.checkIn || '—'}
-                          </td>
-                          <td className="nums py-3.5 px-4 text-center text-[11px] text-quill font-semibold">
-                            {item.checkOut || '—'}
-                          </td>
-                          <td className="nums py-3.5 px-4 text-center font-semibold">{item.nights}</td>
                           <td className="nums py-3.5 px-4 text-right font-semibold">
                             {currencySymbol}{money(item.price)}
                           </td>
@@ -424,7 +411,7 @@ export default function InvoicePublicView() {
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <FileText className="w-6 h-6 text-brand-soft" />
-                    <span className="text-[16px] font-extrabold text-white font-display">Booking Details</span>
+                    <span className="text-[16px] font-extrabold text-white font-display">Fishery Details</span>
                   </div>
                   <p className="text-[11px] text-white/50 font-semibold">Data from MASTER spreadsheet</p>
                 </div>
@@ -452,7 +439,7 @@ export default function InvoicePublicView() {
 
                 <div className="bg-mist rounded-[18px] p-4">
                   <span className="flex items-center gap-1.5 text-[10px] font-bold text-quill-soft uppercase tracking-wider">
-                    <FileText className="w-3.5 h-3.5" /> Rooms
+                    <FileText className="w-3.5 h-3.5 text-brand" /> Fish lines
                   </span>
                   <span className="nums block text-[14px] font-extrabold text-ink mt-2 font-display">
                     {spreadsheetData.rows.length}
@@ -479,17 +466,16 @@ export default function InvoicePublicView() {
                 </div>
               </div>
 
-              {/* Booking Table */}
+              {/* Fishery lines table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-hairline">
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Room</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Check In</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Checkout</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Nights</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Rate</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Total</th>
+                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Fish species</th>
+                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Description</th>
+                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Quantity kg</th>
+                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Rate / kg</th>
+                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Amount</th>
                       <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 text-right">Due</th>
                     </tr>
                   </thead>
@@ -497,22 +483,19 @@ export default function InvoicePublicView() {
                     {spreadsheetData.rows.map((row, idx) => (
                       <tr key={idx} className="border-b border-hairline/50 last:border-b-0">
                         <td className="py-3 pr-4">
-                          <span className="text-[12px] font-bold text-ink">{row.room || '—'}</span>
+                          <span className="text-[12px] font-bold text-ink">{row.fishSpecies || '—'}</span>
                         </td>
                         <td className="py-3 pr-4">
-                          <span className="text-[12px] font-medium text-quill">{row.checkIn || '—'}</span>
+                          <span className="text-[12px] font-medium text-quill">{row.description || '—'}</span>
                         </td>
                         <td className="py-3 pr-4">
-                          <span className="text-[12px] font-medium text-quill">{row.checkout || '—'}</span>
+                          <span className="nums text-[12px] font-bold text-ink">{row.quantityKg || '—'}</span>
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-bold text-ink">{row.nights}</span>
+                          <span className="nums text-[12px] font-medium text-quill">{currencySymbol}{money(row.ratePerKg)}</span>
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-medium text-quill">{currencySymbol}{money(row.roomPrice)}</span>
-                        </td>
-                        <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-bold text-ink">{currencySymbol}{money(row.total)}</span>
+                          <span className="nums text-[12px] font-bold text-ink">{currencySymbol}{money(row.amount)}</span>
                         </td>
                         <td className="py-3 text-right">
                           <span className={`nums text-[12px] font-bold ${row.due > 0 ? 'text-[#a8492f]' : 'text-[#2f6b48]'}`}>
@@ -565,7 +548,7 @@ export default function InvoicePublicView() {
             </span>
             <h2 className="text-[18px] font-extrabold text-ink font-display">No Data Found</h2>
             <p className="text-[13px] text-quill mt-2 max-w-sm mx-auto leading-relaxed font-medium">
-              No invoice or booking data found for this reference number.
+              No invoice or fishery data found for this reference number.
             </p>
             <button
               onClick={goBack}
