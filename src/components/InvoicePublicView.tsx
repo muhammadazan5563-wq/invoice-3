@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { getCurrencySymbol, getTemplateWithDefaults, InvoiceTemplate } from '../lib/settings';
 import {
   ArrowLeft,
   FileText,
@@ -80,6 +81,20 @@ export default function InvoicePublicView() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const savedTemplate = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('invoice-template') || 'null') as InvoiceTemplate | null;
+    } catch {
+      return null;
+    }
+  })();
+  const passedTemplate = (location.state as any)?.invoiceTemplate as InvoiceTemplate | null;
+  const invoiceTemplate = getTemplateWithDefaults(
+    (passedTemplate || savedTemplate || { currency: 'PKR' }) as InvoiceTemplate
+  );
+  const currencySymbol = getCurrencySymbol(invoiceTemplate.currency || 'PKR');
+  const returnTo = (location.state as any)?.returnTo || '/track';
+  const goBack = () => navigate(returnTo);
 
   useEffect(() => {
     if (!invoiceId) {
@@ -162,7 +177,7 @@ export default function InvoicePublicView() {
         <div className="max-w-[600px] mx-auto">
           <header className="flex items-center gap-4 mb-8">
             <button
-              onClick={() => navigate('/track')}
+              onClick={goBack}
               className="w-10 h-10 rounded-full bg-mist hover:bg-mist-2 flex items-center justify-center transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4 text-ink" />
@@ -180,7 +195,7 @@ export default function InvoicePublicView() {
             <h2 className="text-[18px] font-extrabold text-ink font-display">Invoice Not Found</h2>
             <p className="text-[13px] text-quill mt-2 max-w-sm mx-auto leading-relaxed font-medium">{error}</p>
             <button
-              onClick={() => navigate('/track')}
+              onClick={goBack}
               className="mt-6 bg-brand hover:bg-brand-mid text-white text-[12px] font-bold px-6 py-3 rounded-full transition-colors cursor-pointer"
             >
               Try Another Number
@@ -200,7 +215,7 @@ export default function InvoicePublicView() {
         <header className="flex items-center justify-between gap-4 mb-6 print:hidden">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate('/track')}
+              onClick={goBack}
               className="w-10 h-10 rounded-full bg-mist hover:bg-mist-2 flex items-center justify-center transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4 text-ink" />
@@ -228,13 +243,13 @@ export default function InvoicePublicView() {
               {/* Top branding */}
               <div className="flex flex-wrap justify-between items-start gap-4 pb-6 border-b border-hairline">
                 <div className="flex items-center gap-3">
-                  <img src={BRAND_MARK} alt="" className="w-12 h-12 object-contain rounded-xl" />
+                  <img src={invoiceTemplate.companyLogo || BRAND_MARK} alt="" className="w-12 h-12 object-contain rounded-xl" />
                   <div>
                     <h1 className="text-[26px] leading-none font-extrabold tracking-tight text-ink font-display">
-                      FINNOVA
+                      {invoiceTemplate.companyName || 'FINNOVA'}
                     </h1>
                     <p className="text-[10px] text-quill-soft font-bold uppercase tracking-wider mt-1.5">
-                      Smart Finances, Better Business
+                      {invoiceTemplate.tagline || 'Smart Finances, Better Business'}
                     </p>
                   </div>
                 </div>
@@ -299,10 +314,10 @@ export default function InvoicePublicView() {
                           </td>
                           <td className="nums py-3.5 px-4 text-center font-semibold">{item.nights}</td>
                           <td className="nums py-3.5 px-4 text-right font-semibold">
-                            ${money(item.price)}
+                            {currencySymbol}{money(item.price)}
                           </td>
                           <td className="nums py-3.5 px-4 text-right font-bold">
-                            ${money(item.total)}
+                            {currencySymbol}{money(item.total)}
                           </td>
                         </tr>
                       ))}
@@ -329,7 +344,7 @@ export default function InvoicePublicView() {
                       Terms & conditions
                     </span>
                     <p className="text-[11px] text-quill leading-relaxed font-medium">
-                      Any delay in payment will be subject to a late payment fee. Thank you for your residency.
+                      {invoiceTemplate.termsAndConditions || 'Any delay in payment will be subject to a late payment fee. Thank you for your residency.'}
                     </p>
                   </div>
                 </div>
@@ -338,7 +353,7 @@ export default function InvoicePublicView() {
                   <div className="flex justify-between items-center">
                     <span className="text-[12px] font-semibold text-quill">Total amount</span>
                     <span className="nums text-[17px] font-extrabold text-ink font-display">
-                      ${money(invoice.totalAmount)}
+                      {currencySymbol}{money(invoice.totalAmount)}
                     </span>
                   </div>
 
@@ -346,7 +361,7 @@ export default function InvoicePublicView() {
                     <span className="text-[12px] font-semibold text-quill">Amount paid</span>
                     <div className="text-right">
                       <span className="nums text-[15px] font-bold text-[#3f9c68]">
-                        ${money(invoice.amountPaid)}
+                        {currencySymbol}{money(invoice.amountPaid)}
                       </span>
                       {invoice.paymentDate && (
                         <div className="nums text-[10px] text-quill-soft mt-0.5 font-semibold">
@@ -374,8 +389,8 @@ export default function InvoicePublicView() {
                     </span>
                     <span className="nums text-[17px] font-extrabold font-display">
                       {invoice.balance < 0
-                        ? `-$${money(Math.abs(invoice.balance))}`
-                        : `$${money(invoice.balance)}`}
+                        ? `-${currencySymbol}${money(Math.abs(invoice.balance))}`
+                        : `${currencySymbol}${money(invoice.balance)}`}
                     </span>
                   </div>
                 </div>
@@ -385,11 +400,11 @@ export default function InvoicePublicView() {
               <div className="border-t border-hairline pt-5 flex flex-col md:flex-row justify-between items-center gap-3 text-[11px] text-quill font-semibold">
                 <div className="flex items-center gap-2">
                   <Phone className="w-3.5 h-3.5 text-brand" />
-                  <span>123-456-7890</span>
+                  <span>{invoiceTemplate.contactPhone || '123-456-7890'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail className="w-3.5 h-3.5 text-brand" />
-                  <span>billing@finnova.com</span>
+                  <span>{invoiceTemplate.contactEmail || 'billing@finnova.com'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-brand" />
@@ -449,7 +464,7 @@ export default function InvoicePublicView() {
                     <DollarSign className="w-3.5 h-3.5" /> Total
                   </span>
                   <span className="nums block text-[14px] font-extrabold text-ink mt-2 font-display">
-                    ${money(spreadsheetData.totalAmount)}
+                    {currencySymbol}{money(spreadsheetData.totalAmount)}
                   </span>
                 </div>
 
@@ -459,7 +474,7 @@ export default function InvoicePublicView() {
                     {spreadsheetData.totalDue <= 0 ? 'Settled' : 'Balance Due'}
                   </span>
                   <span className={`nums block text-[14px] font-extrabold mt-2 font-display ${spreadsheetData.totalDue <= 0 ? 'text-[#2f6b48]' : 'text-[#a8492f]'}`}>
-                    ${money(spreadsheetData.totalDue <= 0 ? 0 : spreadsheetData.totalDue)}
+                    {currencySymbol}{money(spreadsheetData.totalDue <= 0 ? 0 : spreadsheetData.totalDue)}
                   </span>
                 </div>
               </div>
@@ -494,14 +509,14 @@ export default function InvoicePublicView() {
                           <span className="nums text-[12px] font-bold text-ink">{row.nights}</span>
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-medium text-quill">${money(row.roomPrice)}</span>
+                          <span className="nums text-[12px] font-medium text-quill">{currencySymbol}{money(row.roomPrice)}</span>
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-bold text-ink">${money(row.total)}</span>
+                          <span className="nums text-[12px] font-bold text-ink">{currencySymbol}{money(row.total)}</span>
                         </td>
                         <td className="py-3 text-right">
                           <span className={`nums text-[12px] font-bold ${row.due > 0 ? 'text-[#a8492f]' : 'text-[#2f6b48]'}`}>
-                            ${money(row.due)}
+                            {currencySymbol}{money(row.due)}
                           </span>
                         </td>
                       </tr>
@@ -516,19 +531,19 @@ export default function InvoicePublicView() {
                   <div>
                     <span className="block text-[10px] font-bold text-quill-soft uppercase tracking-wider">Grand Total</span>
                     <span className="nums block text-[18px] font-extrabold text-ink mt-1 font-display">
-                      ${money(spreadsheetData.totalAmount)}
+                      {currencySymbol}{money(spreadsheetData.totalAmount)}
                     </span>
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-quill-soft uppercase tracking-wider">Paid</span>
                     <span className="nums block text-[18px] font-extrabold text-[#2f6b48] mt-1 font-display">
-                      ${money(spreadsheetData.totalAmount - spreadsheetData.totalDue)}
+                      {currencySymbol}{money(spreadsheetData.totalAmount - spreadsheetData.totalDue)}
                     </span>
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-quill-soft uppercase tracking-wider">Balance</span>
                     <span className={`nums block text-[18px] font-extrabold mt-1 font-display ${spreadsheetData.totalDue > 0 ? 'text-[#a8492f]' : 'text-[#2f6b48]'}`}>
-                      ${money(spreadsheetData.totalDue)}
+                      {currencySymbol}{money(spreadsheetData.totalDue)}
                     </span>
                   </div>
                 </div>
@@ -553,7 +568,7 @@ export default function InvoicePublicView() {
               No invoice or booking data found for this reference number.
             </p>
             <button
-              onClick={() => navigate('/track')}
+              onClick={goBack}
               className="mt-6 bg-brand hover:bg-brand-mid text-white text-[12px] font-bold px-6 py-3 rounded-full transition-colors cursor-pointer"
             >
               Try Another Number
