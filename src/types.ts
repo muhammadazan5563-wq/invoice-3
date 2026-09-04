@@ -19,6 +19,8 @@ export interface Invoice {
   id: string;            // Invoice No / ID
   date: string;          // Date
   customerName: string;  // Customer Name, e.g., 'FAIZ'
+  /** Stable contact ID used as the sole ownership/matching key. */
+  customerId?: string;
   customerEmail: string; // Customer Email
   customerPhone?: string;
   /** Legacy spreadsheet-only field; never sent to Supabase invoice tables. */
