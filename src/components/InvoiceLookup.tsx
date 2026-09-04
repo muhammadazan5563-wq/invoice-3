@@ -22,25 +22,10 @@ export default function InvoiceLookup() {
     setError('');
     setIsSearching(true);
 
-    try {
-      const response = await fetch(`/api/lookup-invoice/${encodeURIComponent(trimmed)}`);
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `Invoice not found (${response.status})`);
-      }
-      const data = await response.json();
-      if (!data.rows || data.rows.length === 0) {
-        setError('No invoice found with that number. Please check and try again.');
-        setIsSearching(false);
-        return;
-      }
-      // Navigate to the invoice view page with the data
-      navigate(`/invoice/${encodeURIComponent(trimmed)}`, { state: { invoiceData: data } });
-    } catch (err: any) {
-      setError(err.message || 'Failed to lookup invoice. Please try again.');
-    } finally {
-      setIsSearching(false);
-    }
+    // The invoice page performs the authoritative database lookup.
+    // Navigating directly avoids the retired Google Sheets lookup path.
+    navigate(`/invoice/${encodeURIComponent(trimmed)}`);
+    setIsSearching(false);
   };
 
   return (
