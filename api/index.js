@@ -41,9 +41,8 @@ export default async function handler(req, res) {
 
     // GET /api/invoices
     if (path === "/api/invoices" && method === "GET") {
-      const invoiceTable = req.query?.invoiceType === "vendor" ? "vendor_invoices" : "invoices";
       const { data, error } = await supabase
-        .from(invoiceTable)
+        .from("invoices")
         .select("*")
         .order("created_at", { ascending: false });
 
@@ -53,17 +52,15 @@ export default async function handler(req, res) {
         rowIndex: 0,
         id: row.id,
         date: row.date,
-        customerName: row.customer_name || "",
-        customerId: row.customer_id || "",
+        customerName: row.customer_name,
         customerEmail: row.customer_email || "",
-        customerPhone: row.customer_phone || "",
+        hotelName: row.hotel_name || "",
         totalAmount: Number(row.total_amount || 0),
         amountPaid: Number(row.amount_paid || 0),
         paymentDate: row.payment_date || "",
         balance: Number(row.balance || 0),
         status: row.status || "Pending",
         notes: row.notes || "",
-        invoiceType: row.invoice_type || (req.query?.invoiceType === "vendor" ? "vendor" : "customer"),
         items: row.items || [],
         payments: row.payments || [],
       }));
@@ -74,20 +71,18 @@ export default async function handler(req, res) {
     // POST /api/invoices
     if (path === "/api/invoices" && method === "POST") {
       const inv = req.body;
-      if (!inv.id || !inv.date || !inv.customerName || !inv.customerId) {
-        return res.status(400).json({ error: "Missing required invoice fields (id, date, customerName, customerId)" });
+      if (!inv.id || !inv.date || !inv.customerName) {
+        return res.status(400).json({ error: "Missing required invoice fields" });
       }
 
-      const invoiceTable = inv.invoiceType === "vendor" ? "vendor_invoices" : "invoices";
       const { data, error } = await supabase
-        .from(invoiceTable)
+        .from("invoices")
         .insert({
           id: inv.id,
           date: inv.date,
           customer_name: inv.customerName,
-          customer_id: inv.customerId,
           customer_email: inv.customerEmail || "",
-          customer_phone: inv.customerPhone || "",
+          hotel_name: inv.hotelName || "",
           total_amount: Number(inv.totalAmount || 0),
           amount_paid: Number(inv.amountPaid || 0),
           payment_date: inv.paymentDate || "",
@@ -96,7 +91,6 @@ export default async function handler(req, res) {
           notes: inv.notes || "",
           items: inv.items || [],
           payments: inv.payments || [],
-          invoice_type: inv.invoiceType || "customer",
         })
         .select();
 
@@ -109,18 +103,14 @@ export default async function handler(req, res) {
     if (putMatch && method === "PUT") {
       const id = putMatch[1];
       const inv = req.body;
-      if (!inv.customerId) {
-        return res.status(400).json({ error: "customerId is required" });
-      }
-      const invoiceTable = inv.invoiceType === "vendor" ? "vendor_invoices" : "invoices";
+
       const { data, error } = await supabase
-        .from(invoiceTable)
+        .from("invoices")
         .update({
           date: inv.date,
           customer_name: inv.customerName,
-          customer_id: inv.customerId,
           customer_email: inv.customerEmail || "",
-          customer_phone: inv.customerPhone || "",
+          hotel_name: inv.hotelName || "",
           total_amount: Number(inv.totalAmount || 0),
           amount_paid: Number(inv.amountPaid || 0),
           payment_date: inv.paymentDate || "",
@@ -129,7 +119,6 @@ export default async function handler(req, res) {
           notes: inv.notes || "",
           items: inv.items || [],
           payments: inv.payments || [],
-          invoice_type: inv.invoiceType || "customer",
         })
         .eq("id", id)
         .select();
@@ -142,8 +131,7 @@ export default async function handler(req, res) {
     const deleteMatch = path.match(/^\/api\/invoices\/(.+)$/);
     if (deleteMatch && method === "DELETE") {
       const id = deleteMatch[1];
-      const invoiceTable = req.query?.invoiceType === "vendor" ? "vendor_invoices" : "invoices";
-      const { error } = await supabase.from(invoiceTable).delete().eq("id", id);
+      const { error } = await supabase.from("invoices").delete().eq("id", id);
       if (error) throw error;
       return res.status(200).json({ success: true });
     }
@@ -424,17 +412,15 @@ export default async function handler(req, res) {
       const invoice = {
         id: data.id,
         date: data.date,
-        customerName: data.customer_name || "",
-        customerId: data.customer_id || "",
+        customerName: data.customer_name,
         customerEmail: data.customer_email || "",
-        customerPhone: data.customer_phone || "",
+        hotelName: data.hotel_name || "",
         totalAmount: Number(data.total_amount || 0),
         amountPaid: Number(data.amount_paid || 0),
         paymentDate: data.payment_date || "",
         balance: Number(data.balance || 0),
         status: data.status || "Pending",
         notes: data.notes || "",
-        invoiceType: data.invoice_type || "customer",
         items: data.items || [],
         payments: data.payments || [],
       };
@@ -442,6 +428,131 @@ export default async function handler(req, res) {
       return res.status(200).json(invoice);
     }
 
+    // GET /api/lookup-invoice/:invoiceNumber
+    const lookupMatch = path.match(/^\/api\/lookup-invoice\/(.+)$/);
+    if (lookupMatch && method === "GET") {
+      let invoiceNumber = decodeURIComponent(lookupMatch[1]).trim();
+      if (!invoiceNumber) {
+        return res.status(400).json({ error: "Invoice number is required" });
+      }
+
+      // Normalize - strip common prefixes
+      if (invoiceNumber.toUpperCase().startsWith("REF-")) {
+        invoiceNumber = invoiceNumber.substring(4);
+      }
+      if (invoiceNumber.toUpperCase().startsWith("INV-")) {
+        invoiceNumber = invoiceNumber.substring(4);
+      }
+
+      // Hardcoded spreadsheet configuration
+      const spreadsheetId = "1pxQgtpDyOj0GK0y9A2yIl0xp73fZfY1HG53VPkgS5rA";
+      const sheetName = "MASTER";
+      const sheetRange = encodeURIComponent(`'${sheetName}'!A:J`);
+
+      let allRows = [];
+
+      // Strategy 1: Try with OAuth token from database
+      const { data: settingsData } = await supabase
+        .from("user_settings")
+        .select("firebase_token")
+        .limit(1)
+        .single();
+
+      const accessToken = settingsData?.firebase_token || null;
+
+      if (accessToken) {
+        const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange}`;
+        const sheetResponse = await fetch(readUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (sheetResponse.ok) {
+          const sheetData = await sheetResponse.json();
+          allRows = sheetData.values || [];
+        }
+      }
+
+      // Strategy 2: Try Google Visualization API (works for publicly shared sheets)
+      if (allRows.length === 0) {
+        const gvizUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+        const gvizResponse = await fetch(gvizUrl);
+        if (gvizResponse.ok) {
+          const gvizText = await gvizResponse.text();
+          const jsonMatch = gvizText.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?\s*$/);
+          if (jsonMatch) {
+            const gvizData = JSON.parse(jsonMatch[1]);
+            const table = gvizData.table;
+            if (table && table.rows) {
+              const headerRow = table.cols.map((c) => c.label || "");
+              const dataRows = table.rows.map((r) =>
+                r.c.map((cell) => (cell && cell.v != null) ? String(cell.v) : "")
+              );
+              allRows = [headerRow, ...dataRows];
+            }
+          }
+        }
+      }
+
+      // Strategy 3: Try with API key
+      if (allRows.length === 0) {
+        const googleApiKey = process.env.GOOGLE_API_KEY || "";
+        if (googleApiKey) {
+          const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange}?key=${googleApiKey}`;
+          const sheetResponse = await fetch(readUrl);
+          if (sheetResponse.ok) {
+            const sheetData = await sheetResponse.json();
+            allRows = sheetData.values || [];
+          }
+        }
+      }
+
+      if (allRows.length === 0) {
+        return res.status(500).json({ error: "Unable to access the spreadsheet. Please ensure the sheet is shared publicly." });
+      }
+
+      // Filter rows where column J (index 9) matches "REF-" + invoiceNumber
+      const refValue = `REF-${invoiceNumber}`;
+      const matchingRows = [];
+      let totalDue = 0;
+
+      for (let i = 1; i < allRows.length; i++) {
+        const row = allRows[i];
+        if (!row || row.length === 0) continue;
+
+        const refCol = (row[9] || "").trim();
+        if (refCol === refValue) {
+          matchingRows.push({
+            room: row[0] || "",
+            checkIn: row[1] || "",
+            checkout: row[2] || "",
+            nights: parseInt(row[3]) || 0,
+            roomPrice: parseFloat(row[4]) || 0,
+            total: parseFloat(row[5]) || 0,
+            sum: parseFloat(row[6]) || 0,
+            due: parseFloat(row[7]) || 0,
+            group: row[8] || "",
+            ref: row[9] || "",
+          });
+          totalDue += parseFloat(row[7]) || 0;
+        }
+      }
+
+      let grandTotal = 0;
+      for (const row of matchingRows) {
+        grandTotal += row.total;
+      }
+
+      return res.status(200).json({
+        invoiceNumber,
+        refValue,
+        group: matchingRows.length > 0 ? matchingRows[0].group : "",
+        rows: matchingRows,
+        totalAmount: grandTotal,
+        totalDue,
+        headers: ["Room", "Check In", "Checkout", "Nights", "Room Price", "Total", "Sum", "DUE", "GROUP", "REF#"],
+      });
+    }
+
+    // Route not found
     return res.status(404).json({ error: "API route not found" });
   } catch (error) {
     console.error("API Error:", error);
