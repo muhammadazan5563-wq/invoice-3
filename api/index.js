@@ -52,9 +52,10 @@ export default async function handler(req, res) {
         rowIndex: 0,
         id: row.id,
         date: row.date,
-        customerName: row.customer_name,
+        customerName: row.customer_name || "",
+        customerId: row.customer_id || "",
         customerEmail: row.customer_email || "",
-        hotelName: row.hotel_name || "",
+        customerPhone: row.customer_phone || "",
         totalAmount: Number(row.total_amount || 0),
         amountPaid: Number(row.amount_paid || 0),
         paymentDate: row.payment_date || "",
@@ -63,6 +64,7 @@ export default async function handler(req, res) {
         notes: row.notes || "",
         items: row.items || [],
         payments: row.payments || [],
+        invoiceType: row.invoice_type || "customer",
       }));
 
       return res.status(200).json(invoices);
@@ -81,8 +83,9 @@ export default async function handler(req, res) {
           id: inv.id,
           date: inv.date,
           customer_name: inv.customerName,
+          customer_id: inv.customerId || "",
           customer_email: inv.customerEmail || "",
-          hotel_name: inv.hotelName || "",
+          customer_phone: inv.customerPhone || "",
           total_amount: Number(inv.totalAmount || 0),
           amount_paid: Number(inv.amountPaid || 0),
           payment_date: inv.paymentDate || "",
@@ -109,8 +112,9 @@ export default async function handler(req, res) {
         .update({
           date: inv.date,
           customer_name: inv.customerName,
+          customer_id: inv.customerId || "",
           customer_email: inv.customerEmail || "",
-          hotel_name: inv.hotelName || "",
+          customer_phone: inv.customerPhone || "",
           total_amount: Number(inv.totalAmount || 0),
           amount_paid: Number(inv.amountPaid || 0),
           payment_date: inv.paymentDate || "",
@@ -376,12 +380,13 @@ export default async function handler(req, res) {
         });
       }
 
-      // Flexible matching: exact, case-insensitive, with/without prefix
+      // Flexible matching: exact, case-insensitive, with/without prefix.
+      // Fishery invoices use identifiers such as Z1117, while customers may
+      // search for just 1117. Match a numeric suffix for any alphabetic prefix
+      // instead of assuming the old INV-/REF- hotel format.
       const rawIdUpper = rawId.toUpperCase();
-      let numericPart = rawId;
-      if (rawIdUpper.startsWith("INV-") || rawIdUpper.startsWith("REF-")) {
-        numericPart = rawId.substring(4);
-      }
+      const numericPart = rawIdUpper.replace(/^[A-Z]+-?/, "");
+      const rawDigits = rawIdUpper.match(/\d+$/)?.[0] || "";
 
       let data = allInvoices.find((inv) => {
         const invId = (inv.id || "").toString();
@@ -394,10 +399,9 @@ export default async function handler(req, res) {
         if (invIdUpper === `INV-${rawIdUpper}`) return true;
         // Input has prefix, DB has no prefix
         if (`INV-${invIdUpper}` === rawIdUpper) return true;
-        // Match numeric part
-        const invNumeric = invIdUpper.startsWith("INV-") ? invId.substring(4) : invId;
-        if (invNumeric === numericPart) return true;
-        return false;
+        // Match numeric suffix for IDs such as Z1117, INV-1117, or REF-1117.
+        const invDigits = invIdUpper.match(/\d+$/)?.[0] || "";
+        return Boolean(rawDigits && invDigits && rawDigits === invDigits);
       });
 
       if (!data) {
@@ -412,16 +416,16 @@ export default async function handler(req, res) {
       const invoice = {
         id: data.id,
         date: data.date,
-        customerName: data.customer_name,
-        customerEmail: data.customer_email || "",
-        hotelName: data.hotel_name || "",
-        totalAmount: Number(data.total_amount || 0),
-        amountPaid: Number(data.amount_paid || 0),
-        paymentDate: data.payment_date || "",
-        balance: Number(data.balance || 0),
+        customerName: data.customer_name || data.customer || data.buyer_name || data.client_name || "",
+        customerEmail: data.customer_email || data.email || "",
+        fisheryName: data.fishery_name || data.fish_name || data.supplier_name || "",
+        totalAmount: Number(data.total_amount ?? data.total ?? data.gross_amount ?? 0),
+        amountPaid: Number(data.amount_paid ?? data.paid ?? data.amountPaid ?? 0),
+        paymentDate: data.payment_date || data.paid_date || "",
+        balance: Number(data.balance ?? data.due ?? data.amount_due ?? 0),
         status: data.status || "Pending",
         notes: data.notes || "",
-        items: data.items || [],
+        items: Array.isArray(data.items) ? data.items : [],
         payments: data.payments || [],
       };
 
@@ -509,7 +513,28 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Unable to access the spreadsheet. Please ensure the sheet is shared publicly." });
       }
 
-      // Filter rows where column J (index 9) matches "REF-" + invoiceNumber
+      // Detect fishery columns from the header row instead of assuming the
+      // old hotel booking layout and fixed column positions.
+      const headers = (allRows[0] || []).map((value) => String(value || "").trim());
+      const normalizeHeader = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const referenceIndex = headers.findIndex((header) => {
+        const normalized = normalizeHeader(header);
+        return normalized.includes("invoice") || normalized.includes("ref") || normalized.includes("receivedby");
+      });
+      const refIndex = referenceIndex >= 0 ? referenceIndex : 9;
+      const columnIndex = (pattern, fallback = -1) => {
+        const index = headers.findIndex((header) => pattern.test(normalizeHeader(header)));
+        return index >= 0 ? index : fallback;
+      };
+      const speciesIndex = columnIndex(/fish|species|product|item/, 0);
+      const descriptionIndex = columnIndex(/description|grade|detail/, -1);
+      const quantityIndex = columnIndex(/quantity|qty|weight|kg/, 2);
+      const rateIndex = columnIndex(/rate|price|perkg/, 4);
+      const amountIndex = columnIndex(/totalamount|amount|total/, 5);
+      const paidIndex = columnIndex(/paid|received/, 6);
+      const dueIndex = columnIndex(/due|balance|remaining/, 7);
+      const customerIndex = columnIndex(/customer|buyer|client|group|name/, 8);
+      const requestedDigits = invoiceNumber.match(/\d+$/)?.[0] || invoiceNumber;
       const refValue = `REF-${invoiceNumber}`;
       const matchingRows = [];
       let totalDue = 0;
@@ -518,27 +543,29 @@ export default async function handler(req, res) {
         const row = allRows[i];
         if (!row || row.length === 0) continue;
 
-        const refCol = (row[9] || "").trim();
-        if (refCol === refValue) {
+        const refCol = String(row[refIndex] || "").trim();
+        const refDigits = refCol.match(/\d+$/)?.[0] || "";
+        if (refCol === refValue || refCol === invoiceNumber || (requestedDigits && refDigits === requestedDigits)) {
+          const values = row.map((value) => String(value || ""));
           matchingRows.push({
-            room: row[0] || "",
-            checkIn: row[1] || "",
-            checkout: row[2] || "",
-            nights: parseInt(row[3]) || 0,
-            roomPrice: parseFloat(row[4]) || 0,
-            total: parseFloat(row[5]) || 0,
-            sum: parseFloat(row[6]) || 0,
-            due: parseFloat(row[7]) || 0,
-            group: row[8] || "",
-            ref: row[9] || "",
+            fishSpecies: values[speciesIndex] || "",
+            description: descriptionIndex >= 0 ? values[descriptionIndex] || "" : "",
+            quantityKg: parseFloat(String(values[quantityIndex] || "").replace(/[^0-9.-]/g, "")) || 0,
+            ratePerKg: parseFloat(String(values[rateIndex] || "").replace(/[^0-9.-]/g, "")) || 0,
+            amount: parseFloat(String(values[amountIndex] || "").replace(/[^0-9.-]/g, "")) || 0,
+            paid: parseFloat(String(values[paidIndex] || "").replace(/[^0-9.-]/g, "")) || 0,
+            due: parseFloat(String(values[dueIndex] || "").replace(/[^0-9.-]/g, "")) || 0,
+            customer: values[customerIndex] || "",
+            reference: refCol,
+            values,
           });
-          totalDue += parseFloat(row[7]) || 0;
+          totalDue += matchingRows[matchingRows.length - 1].due;
         }
       }
 
       let grandTotal = 0;
       for (const row of matchingRows) {
-        grandTotal += row.total;
+        grandTotal += row.amount;
       }
 
       return res.status(200).json({
@@ -548,7 +575,7 @@ export default async function handler(req, res) {
         rows: matchingRows,
         totalAmount: grandTotal,
         totalDue,
-        headers: ["Room", "Check In", "Checkout", "Nights", "Room Price", "Total", "Sum", "DUE", "GROUP", "REF#"],
+        headers,
       });
     }
 
