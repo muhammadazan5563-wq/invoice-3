@@ -14,6 +14,7 @@ import {
   MapPin,
   Waves,
 } from 'lucide-react';
+import InvoiceQRCode from './InvoiceQRCode';
 
 const BRAND_MARK =
   'https://mgx-backend-cdn.metadl.com/generate/images/1500378/2026-08-01/tumdfoacajra/logo-finnova-n-mark.png';
@@ -238,7 +239,7 @@ export default function InvoicePublicView() {
 
         {/* ===== INVOICE CARD (from Supabase) ===== */}
         {invoice && (
-          <div className="bg-shell rounded-[30px] overflow-hidden shadow-[0_40px_90px_-60px_rgba(19,17,38,0.25)] mb-6 print:shadow-none print:rounded-none">
+          <div className="bg-shell border-t-[6px] border-ink rounded-[30px] overflow-hidden shadow-[0_40px_90px_-60px_rgba(19,17,38,0.25)] mb-6 print:shadow-none print:rounded-none">
             {/* Branding Header */}
             <div className="p-7 sm:p-8 space-y-7">
               {/* Top branding */}
@@ -313,29 +314,29 @@ export default function InvoicePublicView() {
                 </div>
               )}
 
-              {/* Terms + Totals */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
-                <div className="space-y-5">
-                  {invoice.notes && (
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-1.5">
-                        Notes & Payment Info
-                      </span>
-                      <p className="text-[11px] text-quill leading-relaxed font-medium whitespace-pre-line">
-                        {invoice.notes}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-1.5">
-                      Terms & conditions
-                    </span>
-                    <p className="text-[11px] text-quill leading-relaxed font-medium">
-                      {invoiceTemplate.termsAndConditions || 'Any delay in payment will be subject to a late payment fee. Thank you for your residency.'}
-                    </p>
-                  </div>
+              {/* Terms and payment information */}
+              <div className="space-y-6">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-2">
+                    Terms & conditions
+                  </span>
+                  <p className="text-[11px] text-quill leading-relaxed font-medium whitespace-pre-line">
+                    {invoiceTemplate.termsAndConditions || 'Payment is due within 30 days of invoice date.\nLate payments may incur additional charges.\nAll prices are in USD unless otherwise stated.'}
+                  </p>
                 </div>
 
+                {invoice.notes && (
+                  <div className="bg-mist rounded-[18px] px-5 py-5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-2">
+                      Payment information
+                    </span>
+                    <p className="text-[11px] text-ink leading-relaxed font-medium whitespace-pre-line">
+                      {invoice.notes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Totals */}
                 <div className="space-y-3.5">
                   <div className="flex justify-between items-center">
                     <span className="text-[12px] font-semibold text-quill">Total amount</span>
@@ -381,6 +382,19 @@ export default function InvoicePublicView() {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Online tracking */}
+              <div className="border-t border-hairline pt-6 flex items-center justify-between gap-6">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-2">
+                    Track online
+                  </span>
+                  <p className="text-[11px] text-quill leading-relaxed font-medium max-w-sm">
+                    Scan this QR code or visit the tracking page to check your invoice status anytime.
+                  </p>
+                </div>
+                <InvoiceQRCode invoiceId={invoice.id} size={104} />
               </div>
 
               {/* Contact footer */}
