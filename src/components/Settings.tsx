@@ -280,6 +280,8 @@ export default function Settings({ user, token, onClose, onSettingsSaved }: Sett
         tagline: tagline.trim(),
       };
       await saveInvoiceTemplate(user.uid, template);
+      // Keep the latest template available to the public Track view in this browser.
+      localStorage.setItem('invoice-template', JSON.stringify(template));
       setSaveSuccess('Invoice template saved!');
       setTimeout(() => setSaveSuccess(null), 3000);
       // Notify parent to refresh template settings
