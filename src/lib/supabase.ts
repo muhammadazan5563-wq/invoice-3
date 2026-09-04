@@ -125,15 +125,15 @@ export async function getPublicInvoice(rawId: string): Promise<Invoice | null> {
   }
 
   const upper = searched.toUpperCase();
-  const numeric = upper.startsWith('INV-') || upper.startsWith('REF-') ? searched.slice(4) : searched;
+  const numeric = upper.match(/\d+$/)?.[0] || upper;
 
   const match = (data || []).find((row: any) => {
     const id = String(row.id || '');
     const idUpper = id.toUpperCase();
     if (id === searched || idUpper === upper) return true;
     if (idUpper === `INV-${upper}` || `INV-${idUpper}` === upper) return true;
-    const idNumeric = idUpper.startsWith('INV-') || idUpper.startsWith('REF-') ? id.slice(4) : id;
-    return idNumeric === numeric || idNumeric === searched;
+    const idNumeric = idUpper.match(/\d+$/)?.[0] || idUpper;
+    return idNumeric === numeric || idNumeric === upper;
   });
 
   return match ? rowToInvoice(match) : null;
