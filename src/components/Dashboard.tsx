@@ -114,7 +114,9 @@ CREATE TABLE IF NOT EXISTS vendor_invoices (LIKE invoices INCLUDING ALL);
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT NOT NULL DEFAULT 'customer';
 ALTER TABLE vendor_invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT NOT NULL DEFAULT 'vendor';
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id TEXT;
 ALTER TABLE vendor_invoices ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE vendor_invoices ADD COLUMN IF NOT EXISTS customer_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_vendor_invoices_date ON vendor_invoices (date DESC);
 CREATE INDEX IF NOT EXISTS idx_vendor_invoices_contact ON vendor_invoices (customer_email, customer_name);
 
@@ -254,6 +256,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         id: invoice.id,
         date: invoice.date,
         customerName: invoice.customerName,
+        customerId: invoice.customerId,
         customerEmail: invoice.customerEmail,
         totalAmount: invoice.totalAmount,
         amountPaid: invoice.totalAmount,
