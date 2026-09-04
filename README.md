@@ -4,10 +4,6 @@
 
 # Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/6976875f-df0d-42c3-971b-becd667683c1
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
@@ -21,8 +17,6 @@ View your app in AI Studio: https://ai.studio/apps/6976875f-df0d-42c3-971b-becd6
 
 
 # Supabase Connection Keys (Server-Side Secure)
-SUPABASE_URL="https://jybjzbtgpnhkdyofayji.supabase.co"
-SUPABASE_SECRET_KEY="sb_secret_UIkjVs1M3xJP2EgPXqRjdw_zC88aiJg"
-SUPABASE_PUBLISHABLE_KEY="sb_publishable_FDeECQfWSc89GcQVAUAhyA_QuEfE4AY"
-SUPABASE_JWKS_URL="https://jybjzbtgpnhkdyofayji.supabase.co/auth/v1/.well-known/jwks.json"
+SUPABASE_URL="https://rfmdptajmsvsqkrikugy.supabase.co"
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_GMAKWARwjUkSiWL4lHLBuA_DNVTcheD"
 
