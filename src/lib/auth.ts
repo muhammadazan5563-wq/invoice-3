@@ -30,6 +30,7 @@ provider.addScope('https://www.googleapis.com/auth/userinfo.profile');
 provider.setCustomParameters({ prompt: 'consent' });
 
 let cachedAccessToken: string | null = null;
+const resolvedSessionCache = new Map<string, Session>();
 
 function persistToken(token: string): void {
   cachedAccessToken = token;
@@ -76,10 +77,18 @@ export async function resolveSession(user: User): Promise<Session | null> {
     return { user, role: 'admin', contact: null, accessToken: readPersistedToken() };
   }
 
+  // The root app is remounted when navigating back from an invoice route.
+  // Reuse the already-resolved contact instead of running another Firestore
+  // getDocs() call and opening another Listen channel.
+  const cachedSession = resolvedSessionCache.get(user.uid);
+  if (cachedSession) return { ...cachedSession, user };
+
   const contact = await getContactByEmail(user.email || '');
   if (!contact) return null;
 
-  return { user, role: contact.type, contact, accessToken: null };
+  const session = { user, role: contact.type, contact, accessToken: null } as Session;
+  resolvedSessionCache.set(user.uid, session);
+  return session;
 }
 
 /** Watches the auth state and hands back a fully resolved session. */
@@ -156,4 +165,5 @@ export async function refreshGoogleToken(): Promise<string | null> {
 export async function logout(): Promise<void> {
   await signOut(auth);
   clearPersistedToken();
+  resolvedSessionCache.clear();
 }
