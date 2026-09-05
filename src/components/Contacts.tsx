@@ -98,6 +98,7 @@ export default function Contacts() {
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | ContactType>('all');
+  const [visibleCount, setVisibleCount] = useState(50);
 
   useEffect(() => {
     loadContacts();
@@ -188,6 +189,12 @@ export default function Contacts() {
       );
     });
   }, [contacts, search, typeFilter]);
+
+  const renderedContacts = visibleContacts.slice(0, visibleCount);
+
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [search, typeFilter]);
 
   const vendorCount = contacts.filter((contact) => contact.type === 'vendor').length;
   const customerCount = contacts.length - vendorCount;
@@ -532,7 +539,7 @@ export default function Contacts() {
             </p>
           </div>
           <span className="nums text-[11px] font-bold text-quill bg-mist px-3.5 py-2 rounded-full">
-            {visibleContacts.length} shown
+            {Math.min(visibleCount, visibleContacts.length)} of {visibleContacts.length} shown
           </span>
         </div>
 
@@ -579,7 +586,7 @@ export default function Contacts() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {visibleContacts.map((contact) => (
+            {renderedContacts.map((contact) => (
               <article key={contact.id} className="bg-mist rounded-[22px] p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -674,6 +681,13 @@ export default function Contacts() {
                 )}
               </article>
             ))}
+            {visibleContacts.length > visibleCount && (
+              <div className="col-span-full flex justify-center mt-2">
+                <button type="button" onClick={() => setVisibleCount((previous) => previous + 50)} className="inline-flex items-center gap-2 bg-brand hover:bg-brand-mid text-white text-[11px] font-bold px-5 py-2.5 rounded-full cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" /> Load 50 more
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>
