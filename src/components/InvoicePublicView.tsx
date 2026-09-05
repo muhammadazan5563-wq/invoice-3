@@ -3,10 +3,6 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { getCurrencySymbol, getTemplateWithDefaults, InvoiceTemplate } from '../lib/settings';
 import {
   ArrowLeft,
-  FileText,
-  Users,
-  DollarSign,
-  CheckCircle2,
   AlertCircle,
   Printer,
   Phone,
@@ -46,28 +42,6 @@ interface InvoiceRecord {
   payments: { amount: number; date: string }[];
 }
 
-interface SpreadsheetRow {
-  fishSpecies: string;
-  description: string;
-  quantityKg: number;
-  ratePerKg: number;
-  amount: number;
-  paid: number;
-  due: number;
-  customer: string;
-  reference: string;
-  values?: string[];
-}
-
-interface SpreadsheetData {
-  invoiceNumber: string;
-  refValue: string;
-  group: string;
-  rows: SpreadsheetRow[];
-  totalAmount: number;
-  totalDue: number;
-  headers: string[];
-}
 
 const money = (n: number) =>
   n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -78,9 +52,6 @@ export default function InvoicePublicView() {
   const navigate = useNavigate();
 
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
-  const [spreadsheetData, setSpreadsheetData] = useState<SpreadsheetData | null>(
-    (location.state as any)?.invoiceData || null
-  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const savedTemplate = (() => {
@@ -105,49 +76,16 @@ export default function InvoicePublicView() {
       return;
     }
 
-    const fetchData = async () => {
+    const fetchInvoice = async () => {
       try {
-        // Normalize the invoice ID - strip prefixes for the spreadsheet lookup
-        let lookupId = invoiceId!;
-        if (lookupId.toUpperCase().startsWith("INV-")) {
-          lookupId = lookupId.substring(4);
-        } else if (lookupId.toUpperCase().startsWith("REF-")) {
-          lookupId = lookupId.substring(4);
+        // Invoice data is now the only source of truth. Do not make the old
+        // Google Sheets request on the critical invoice-opening path.
+        const response = await fetch(`/api/public-invoice/${encodeURIComponent(invoiceId)}`);
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || 'Invoice not found');
         }
-
-        // Fetch both invoice record (server API) and spreadsheet data in parallel
-        const [invoiceRes, sheetRes] = await Promise.allSettled([
-          fetch(`/api/public-invoice/${encodeURIComponent(invoiceId!)}`),
-          fetch(`/api/lookup-invoice/${encodeURIComponent(lookupId)}`),
-        ]);
-
-        // Process invoice record from server API
-        if (invoiceRes.status === 'fulfilled' && invoiceRes.value.ok) {
-          const invoiceData = await invoiceRes.value.json();
-          setInvoice(invoiceData);
-        } else if (invoiceRes.status === 'fulfilled') {
-          // Log the error response for debugging
-          const errBody = await invoiceRes.value.json().catch(() => ({}));
-          console.warn('[InvoicePublicView] Server invoice lookup failed:', invoiceRes.value.status, errBody);
-        }
-
-        // Process spreadsheet data
-        if (sheetRes.status === 'fulfilled' && sheetRes.value.ok) {
-          const sheetData = await sheetRes.value.json();
-          if (sheetData.rows && sheetData.rows.length > 0) {
-            setSpreadsheetData(sheetData);
-          }
-        }
-
-        // If neither returned data, show error
-        const hasStateData = !!(location.state as any)?.invoiceData;
-        if (
-          (invoiceRes.status !== 'fulfilled' || !invoiceRes.value.ok) &&
-          (sheetRes.status !== 'fulfilled' || !sheetRes.value.ok) &&
-          !hasStateData
-        ) {
-          setError('Invoice not found. Please check the invoice number and try again.');
-        }
+        setInvoice(await response.json());
       } catch (err: any) {
         setError(err.message || 'Failed to load invoice');
       } finally {
@@ -155,7 +93,7 @@ export default function InvoicePublicView() {
       }
     };
 
-    fetchData();
+    fetchInvoice();
   }, [invoiceId]);
 
   const handlePrint = () => {
@@ -173,7 +111,7 @@ export default function InvoicePublicView() {
     );
   }
 
-  if (error && !invoice && !spreadsheetData) {
+  if (error && !invoice) {
     return (
       <div className="min-h-screen bg-canvas px-3 sm:px-5 py-4 sm:py-6">
         <div className="max-w-[600px] mx-auto">
@@ -208,7 +146,7 @@ export default function InvoicePublicView() {
     );
   }
 
-  const isPaid = invoice ? invoice.balance <= 0 : (spreadsheetData ? spreadsheetData.totalDue <= 0 : false);
+  const isPaid = invoice ? invoice.balance <= 0 : false;
 
   return (
     <div className="min-h-screen bg-canvas px-3 sm:px-5 py-4 sm:py-6 print:bg-white print:p-0">
@@ -416,146 +354,7 @@ export default function InvoicePublicView() {
           </div>
         )}
 
-        {/* ===== SPREADSHEET DATA CARD (from Google Sheets MASTER) ===== */}
-        {spreadsheetData && spreadsheetData.rows.length > 0 && (
-          <div className="bg-shell rounded-[30px] overflow-hidden shadow-[0_40px_90px_-60px_rgba(19,17,38,0.25)] animate-fade-in print:shadow-none print:rounded-none">
-            {/* Top Banner */}
-            <div className="bg-ink px-6 sm:px-8 py-6 sm:py-8">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <FileText className="w-6 h-6 text-brand-soft" />
-                    <span className="text-[16px] font-extrabold text-white font-display">Fishery Details</span>
-                  </div>
-                  <p className="text-[11px] text-white/50 font-semibold">Data from MASTER spreadsheet</p>
-                </div>
-
-                <div className="text-left sm:text-right">
-                  <span className="block text-[11px] font-bold text-white/50 uppercase tracking-wider">Reference</span>
-                  <span className="block text-[22px] font-extrabold text-white font-display mt-1">
-                    {spreadsheetData.refValue}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Summary Cards */}
-            <div className="px-6 sm:px-8 py-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-                <div className="bg-mist rounded-[18px] p-4">
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold text-quill-soft uppercase tracking-wider">
-                    <Users className="w-3.5 h-3.5" /> Group
-                  </span>
-                  <span className="block text-[14px] font-extrabold text-ink mt-2 truncate font-display">
-                    {spreadsheetData.group || '—'}
-                  </span>
-                </div>
-
-                <div className="bg-mist rounded-[18px] p-4">
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold text-quill-soft uppercase tracking-wider">
-                    <FileText className="w-3.5 h-3.5 text-brand" /> Fish lines
-                  </span>
-                  <span className="nums block text-[14px] font-extrabold text-ink mt-2 font-display">
-                    {spreadsheetData.rows.length}
-                  </span>
-                </div>
-
-                <div className="bg-mist rounded-[18px] p-4">
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold text-quill-soft uppercase tracking-wider">
-                    <DollarSign className="w-3.5 h-3.5" /> Total
-                  </span>
-                  <span className="nums block text-[14px] font-extrabold text-ink mt-2 font-display">
-                    {currencySymbol}{money(spreadsheetData.totalAmount)}
-                  </span>
-                </div>
-
-                <div className={`rounded-[18px] p-4 ${spreadsheetData.totalDue <= 0 ? 'bg-[#e8f7ee]' : 'bg-[#fdeeea]'}`}>
-                  <span className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${spreadsheetData.totalDue <= 0 ? 'text-[#2f6b48]' : 'text-[#a8492f]'}`}>
-                    {spreadsheetData.totalDue <= 0 ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                    {spreadsheetData.totalDue <= 0 ? 'Settled' : 'Balance Due'}
-                  </span>
-                  <span className={`nums block text-[14px] font-extrabold mt-2 font-display ${spreadsheetData.totalDue <= 0 ? 'text-[#2f6b48]' : 'text-[#a8492f]'}`}>
-                    {currencySymbol}{money(spreadsheetData.totalDue <= 0 ? 0 : spreadsheetData.totalDue)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Fishery lines table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-hairline">
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Fish species</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4">Description</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Quantity kg</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Rate / kg</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 pr-4 text-right">Amount</th>
-                      <th className="text-[10px] font-bold text-quill-soft uppercase tracking-wider pb-3 text-right">Due</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {spreadsheetData.rows.map((row, idx) => (
-                      <tr key={idx} className="border-b border-hairline/50 last:border-b-0">
-                        <td className="py-3 pr-4">
-                          <span className="text-[12px] font-bold text-ink">{row.fishSpecies || '—'}</span>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className="text-[12px] font-medium text-quill">{row.description || '—'}</span>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className="nums text-[12px] font-bold text-ink">{row.quantityKg || '—'}</span>
-                        </td>
-                        <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-medium text-quill">{currencySymbol}{money(row.ratePerKg)}</span>
-                        </td>
-                        <td className="py-3 pr-4 text-right">
-                          <span className="nums text-[12px] font-bold text-ink">{currencySymbol}{money(row.amount)}</span>
-                        </td>
-                        <td className="py-3 text-right">
-                          <span className={`nums text-[12px] font-bold ${row.due > 0 ? 'text-[#a8492f]' : 'text-[#2f6b48]'}`}>
-                            {currencySymbol}{money(row.due)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals Footer */}
-              <div className="mt-6 pt-5 border-t border-hairline flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-6">
-                  <div>
-                    <span className="block text-[10px] font-bold text-quill-soft uppercase tracking-wider">Grand Total</span>
-                    <span className="nums block text-[18px] font-extrabold text-ink mt-1 font-display">
-                      {currencySymbol}{money(spreadsheetData.totalAmount)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-quill-soft uppercase tracking-wider">Paid</span>
-                    <span className="nums block text-[18px] font-extrabold text-[#2f6b48] mt-1 font-display">
-                      {currencySymbol}{money(spreadsheetData.totalAmount - spreadsheetData.totalDue)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold text-quill-soft uppercase tracking-wider">Balance</span>
-                    <span className={`nums block text-[18px] font-extrabold mt-1 font-display ${spreadsheetData.totalDue > 0 ? 'text-[#a8492f]' : 'text-[#2f6b48]'}`}>
-                      {currencySymbol}{money(spreadsheetData.totalDue)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-[12px] font-bold ${spreadsheetData.totalDue <= 0 ? 'bg-[#e8f7ee] text-[#2f6b48]' : 'bg-[#fdeeea] text-[#a8492f]'}`}>
-                  {spreadsheetData.totalDue <= 0 ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                  {spreadsheetData.totalDue <= 0 ? 'Fully Settled' : 'Payment Outstanding'}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* If only spreadsheet data exists but no invoice record */}
-        {!invoice && !spreadsheetData && (
+        {!invoice && (
           <div className="bg-shell rounded-[28px] p-8 text-center shadow-[0_20px_60px_-30px_rgba(19,17,38,0.15)]">
             <span className="w-14 h-14 rounded-2xl bg-[#fdeeea] flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 text-[#a8492f]" />
