@@ -328,6 +328,8 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     if (allocated <= 0) throw new Error('This contact has no outstanding invoice balance.');
 
     const paymentDate = getTodayInTimezone(invoiceTemplate?.timezone || 'UTC');
+    const paymentId = crypto.randomUUID();
+    const contact = contacts.find((item) => item.id === contactId);
     let remaining = allocated;
     const updates = contactInvoices.flatMap((invoice) => {
       if (remaining <= 0) return [];
@@ -340,7 +342,13 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         paymentDate,
         balance,
         status: balance === 0 ? 'Paid' : 'Due',
-        payments: [...(invoice.payments || []), { amount: applied, date: paymentDate }],
+        payments: [...(invoice.payments || []), {
+          amount: applied,
+          date: paymentDate,
+          paymentId,
+          contactName: contact?.fullName || invoice.customerName,
+          contactPhone: contact?.phone || invoice.customerPhone || '',
+        }],
       };
       return [updateInvoice(invoice.id, updatedInvoice)];
     });
