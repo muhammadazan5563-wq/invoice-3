@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
+
+const gzipAsync = promisify(gzip);
 
 const supabaseUrl = process.env.SUPABASE_URL || "https://rfmdptajmsvsqkrikugy.supabase.co";
 // Use the publishable/anon key - the secret key was invalid ("Unregistered API key")
@@ -8,6 +13,30 @@ const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },
 });
+
+// Vercel also compresses responses at the edge, but explicitly negotiating gzip
+// keeps this endpoint efficient when it is invoked directly or locally.
+async function sendCompressedJson(req, res, status, payload, cacheControl) {
+  const body = JSON.stringify(payload);
+  const etag = `"${createHash("sha1").update(body).digest("base64url")}"`;
+  res.setHeader("Cache-Control", cacheControl);
+  res.setHeader("ETag", etag);
+  if (req.headers["if-none-match"] === etag) {
+    return res.status(304).end();
+  }
+
+  if (String(req.headers["accept-encoding"] || "").includes("gzip")) {
+    const compressed = await gzipAsync(body, { level: 6 });
+    res.statusCode = status;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Vary", "Accept-Encoding");
+    res.setHeader("Content-Length", compressed.length);
+    return res.end(compressed);
+  }
+
+  return res.status(status).json(payload);
+}
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -367,67 +396,60 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Invoice ID is required" });
       }
 
-      // Fetch both invoice tables and do flexible matching. Both tables share
-      // the same schema; invoice_type identifies the source in the response.
-      const [{ data: customerInvoices, error: customerError }, { data: vendorInvoices, error: vendorError }] = await Promise.all([
-        supabase.from("invoices").select("*"),
-        supabase.from("vendor_invoices").select("*"),
-      ]);
-      const allInvoices = [
-        ...(customerInvoices || []).map((invoice) => ({ ...invoice, invoice_type: invoice.invoice_type || "customer" })),
-        ...(vendorInvoices || []).map((invoice) => ({ ...invoice, invoice_type: "vendor" })),
-      ];
-      const fetchAllError = customerError || vendorError;
-
-      if (fetchAllError) {
-        console.error("[public-invoice] Supabase error:", fetchAllError);
-        return res.status(500).json({ 
-          error: "Database query failed", 
-          details: fetchAllError.message,
-          hint: fetchAllError.hint || null
-        });
-      }
-
-      if (!allInvoices || allInvoices.length === 0) {
-        return res.status(404).json({ 
-          error: "No invoices exist in database",
-          searched: rawId,
-          debug_url: supabaseUrl
-        });
-      }
-
-      // Flexible matching: exact, case-insensitive, with/without prefix.
-      // Fishery invoices use identifiers such as Z1117, while customers may
-      // search for just 1117. Match a numeric suffix for any alphabetic prefix
-      // instead of assuming the old INV-/REF- hotel format.
       const rawIdUpper = rawId.toUpperCase();
-      const numericPart = rawIdUpper.replace(/^[A-Z]+-?/, "");
       const rawDigits = rawIdUpper.match(/\d+$/)?.[0] || "";
+      const candidateIds = [...new Set([
+        rawIdUpper,
+        rawIdUpper.startsWith("INV-") || rawIdUpper.startsWith("REF-") ? rawId.slice(4) : `INV-${rawId}`,
+      ])];
+      // Keep the select schema-compatible with existing installations. The
+      // indexed id filter limits the database work and only one row is read.
+      const invoiceFields = "*";
 
-      let data = allInvoices.find((inv) => {
-        const invId = (inv.id || "").toString();
-        const invIdUpper = invId.toUpperCase();
-        // Exact match
-        if (invId === rawId) return true;
-        // Case-insensitive match
-        if (invIdUpper === rawIdUpper) return true;
-        // Input has no prefix, DB has INV- prefix
-        if (invIdUpper === `INV-${rawIdUpper}`) return true;
-        // Input has prefix, DB has no prefix
-        if (`INV-${invIdUpper}` === rawIdUpper) return true;
-        // Match numeric suffix for IDs such as Z1117, INV-1117, or REF-1117.
-        const invDigits = invIdUpper.match(/\d+$/)?.[0] || "";
-        return Boolean(rawDigits && invDigits && rawDigits === invDigits);
-      });
-
-      if (!data) {
-        return res.status(404).json({ 
-          error: "Invoice not found", 
-          searched: rawId,
-          total_invoices: allInvoices.length,
-          sample_ids: allInvoices.slice(0, 5).map((i) => i.id)
-        });
+      // The old implementation downloaded every row from both tables before
+      // searching in JavaScript. Query the indexed id column instead; the
+      // common path now needs only two small database requests in parallel.
+      const exactResults = await Promise.all([
+        supabase.from("invoices").select(invoiceFields).eq("id", rawId).limit(1),
+        supabase.from("vendor_invoices").select(invoiceFields).eq("id", rawId).limit(1),
+      ]);
+      const queryError = exactResults.find((result) => result.error)?.error;
+      if (queryError) {
+        console.error("[public-invoice] Supabase error:", queryError);
+        return sendCompressedJson(req, res, 500, { error: "Database query failed", details: queryError.message }, "no-store");
       }
+
+      let data = exactResults.flatMap((result, index) => (result.data || []).map((row) => ({
+        ...row,
+        invoice_type: index === 1 ? "vendor" : (row.invoice_type || "customer"),
+      })))[0];
+
+      if (!data && candidateIds.length > 1) {
+        const prefixResults = await Promise.all([
+          ...candidateIds.slice(1).map((candidate) => supabase.from("invoices").select(invoiceFields).eq("id", candidate).limit(1)),
+          ...candidateIds.slice(1).map((candidate) => supabase.from("vendor_invoices").select(invoiceFields).eq("id", candidate).limit(1)),
+        ]);
+        const prefixError = prefixResults.find((result) => result.error)?.error;
+        if (prefixError) return sendCompressedJson(req, res, 500, { error: "Database query failed", details: prefixError.message }, "no-store");
+        data = prefixResults.flatMap((result, index) => (result.data || []).map((row) => ({
+          ...row,
+          invoice_type: index >= candidateIds.slice(1).length ? "vendor" : (row.invoice_type || "customer"),
+        })))[0];
+      }
+
+      // Preserve forgiving numeric-suffix matching as a fallback, but still
+      // keep the database response limited to one matching row per table.
+      if (!data && rawDigits) {
+        const suffixResults = await Promise.all([
+          supabase.from("invoices").select(invoiceFields).ilike("id", `%${rawDigits}`).limit(1),
+          supabase.from("vendor_invoices").select(invoiceFields).ilike("id", `%${rawDigits}`).limit(1),
+        ]);
+        const suffixError = suffixResults.find((result) => result.error)?.error;
+        if (suffixError) return sendCompressedJson(req, res, 500, { error: "Database query failed", details: suffixError.message }, "no-store");
+        data = suffixResults[0].data?.[0] || (suffixResults[1].data?.[0] ? { ...suffixResults[1].data[0], invoice_type: "vendor" } : undefined);
+      }
+
+      if (!data) return sendCompressedJson(req, res, 404, { error: "Invoice not found", searched: rawId }, "public, max-age=15, s-maxage=60, stale-while-revalidate=300");
 
       const invoice = {
         id: data.id,
@@ -445,7 +467,7 @@ export default async function handler(req, res) {
         payments: data.payments || [],
       };
 
-      return res.status(200).json(invoice);
+      return sendCompressedJson(req, res, 200, invoice, "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
     }
 
     // GET /api/lookup-invoice/:invoiceNumber
