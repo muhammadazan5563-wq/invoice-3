@@ -12,6 +12,10 @@ export interface BookingItem {
 export interface PaymentRecord {
   amount: number;
   date: string;
+  /** Shared ID links invoice splits back to one admin payment entry. */
+  paymentId?: string;
+  contactName?: string;
+  contactPhone?: string;
 }
 
 export interface Invoice {
