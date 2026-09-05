@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -51,6 +51,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
   );
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(50);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
 
   const invoiceCacheKey = `${INVOICE_CACHE_PREFIX}${role}:${contact?.id || 'unknown'}`;
@@ -141,6 +142,19 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
   useEffect(() => {
     setVisibleCount(50);
   }, [search]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || visibleCount >= visibleInvoices.length) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setVisibleCount((previous) => previous + 50);
+      },
+      { rootMargin: '240px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleInvoices.length, visibleCount]);
 
   const displayName = contact?.fullName || session.user.email || 'Account';
   const initials = displayName
@@ -500,13 +514,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
                     </div>
                   </article>
                 ))}
-                {visibleInvoices.length > visibleCount && (
-                  <div className="flex justify-center pt-2">
-                    <button type="button" onClick={() => setVisibleCount((previous) => previous + 50)} className="inline-flex items-center gap-2 bg-brand hover:bg-brand-mid text-white text-[11px] font-bold px-5 py-2.5 rounded-full cursor-pointer">
-                      <RefreshCw className="w-3.5 h-3.5" /> Load 50 more
-                    </button>
-                  </div>
-                )}
+                {visibleInvoices.length > visibleCount && <div ref={loadMoreRef} className="h-8" aria-hidden="true" />}
               </div>
             )}
           </section>
