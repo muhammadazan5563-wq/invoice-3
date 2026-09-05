@@ -26,6 +26,7 @@ import Ledger from './Ledger';
 import KpiCards from './KpiCards';
 import InvoiceShowcase from './InvoiceShowcase';
 import Contacts from './Contacts';
+import Payment from './Payment';
 import { Contact, getContacts } from '../lib/contacts';
 import {
   LogOut,
@@ -59,7 +60,7 @@ interface DashboardProps {
   onTokenRefresh?: (newToken: string) => void;
 }
 
-type ViewState = 'dashboard' | 'vendor-dashboard' | 'create' | 'edit' | 'settings' | 'ledger' | 'contacts';
+type ViewState = 'dashboard' | 'vendor-dashboard' | 'create' | 'edit' | 'settings' | 'ledger' | 'payment' | 'contacts';
 
 export default function Dashboard({ user, token, onLogout, onTokenRefresh }: DashboardProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -316,6 +317,47 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     });
   };
 
+  const handleApplyPayment = async (contactId: string, amount: number): Promise<number> => {
+    const contactInvoices = [...invoices, ...vendorInvoices]
+      .filter((invoice) => invoice.customerId === contactId && invoice.balance > 0)
+      .sort((a, b) => {
+        const dateDifference = new Date(a.date).getTime() - new Date(b.date).getTime();
+        return dateDifference || a.id.localeCompare(b.id);
+      });
+    const allocated = Math.min(amount, contactInvoices.reduce((sum, invoice) => sum + invoice.balance, 0));
+    if (allocated <= 0) throw new Error('This contact has no outstanding invoice balance.');
+
+    const paymentDate = getTodayInTimezone(invoiceTemplate?.timezone || 'UTC');
+    let remaining = allocated;
+    const updates = contactInvoices.flatMap((invoice) => {
+      if (remaining <= 0) return [];
+      const applied = Math.min(remaining, invoice.balance);
+      remaining -= applied;
+      const balance = Math.max(0, invoice.balance - applied);
+      const updatedInvoice: Omit<Invoice, 'rowIndex' | 'rawRow'> = {
+        ...invoice,
+        amountPaid: invoice.amountPaid + applied,
+        paymentDate,
+        balance,
+        status: balance === 0 ? 'Paid' : 'Due',
+        payments: [...(invoice.payments || []), { amount: applied, date: paymentDate }],
+      };
+      return [updateInvoice(invoice.id, updatedInvoice)];
+    });
+
+    setLoadingInvoices(true);
+    setError(null);
+    try {
+      await Promise.all(updates);
+      await fetchInvoices();
+      return allocated;
+    } catch (err: any) {
+      throw new Error(`Payment saved only partially or failed: ${err.message}`);
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
   const handleDeleteInvoice = async (invoice: Invoice) => {
     const performDelete = async () => {
       setLoadingInvoices(true);
@@ -414,6 +456,7 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
     { key: 'vendor-dashboard', label: 'Vendor dashboard' },
     { key: 'create', label: 'Invoice' },
     { key: 'ledger', label: 'Ledger' },
+    { key: 'payment', label: 'Payment' },
     { key: 'contacts', label: 'Contacts' },
     { key: 'settings', label: 'Settings' },
   ];
@@ -431,6 +474,8 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
           ? 'Edit invoice'
             : viewState === 'ledger'
               ? 'Ledger'
+              : viewState === 'payment'
+                ? 'Payment'
               : viewState === 'contacts'
                 ? 'Contacts'
               : 'Settings';
@@ -446,6 +491,8 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
           ? 'Adjust line items, totals and payment records.'
             : viewState === 'ledger'
               ? 'Every payment movement, reconciled by date.'
+              : viewState === 'payment'
+                ? 'Record payments and allocate them from the oldest invoice to the newest.'
               : viewState === 'contacts'
                 ? 'Manage the vendors and customers connected to your ledger.'
               : 'Company profile, currency and sheet connection.';
@@ -832,6 +879,19 @@ ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;`;
         {viewState === 'ledger' && (
           <div className="animate-fade-in">
             <Ledger template={invoiceTemplate} />
+          </div>
+        )}
+
+        {/* ── Payments ───────────────────────────────────────── */}
+        {viewState === 'payment' && (
+          <div className="animate-fade-in" id="payment-section">
+            <Payment
+              invoices={invoices}
+              vendorInvoices={vendorInvoices}
+              contacts={contacts}
+              template={invoiceTemplate}
+              onSavePayment={handleApplyPayment}
+            />
           </div>
         )}
 
