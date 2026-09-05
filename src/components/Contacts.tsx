@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   FileImage,
+  KeyRound,
   Mail,
   MapPin,
   Phone,
@@ -589,6 +590,12 @@ export default function Contacts() {
                       <Mail className="w-3.5 h-3.5 text-brand shrink-0" />
                       {contact.email}
                     </p>
+                    {contact.tempPassword && (
+                      <p className="flex items-center gap-1.5 text-[11px] text-quill font-semibold mt-1.5 truncate">
+                        <KeyRound className="w-3.5 h-3.5 text-brand shrink-0" />
+                        <span className="font-mono text-brand">{contact.tempPassword}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
