@@ -50,6 +50,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
     searchParams.get('panel') === 'invoices' ? 'invoices' : 'dashboard'
   );
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(50);
   const [actionsOpen, setActionsOpen] = useState(false);
 
   const invoiceCacheKey = `${INVOICE_CACHE_PREFIX}${role}:${contact?.id || 'unknown'}`;
@@ -134,6 +135,12 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
         (invoice.date || '').toLowerCase().includes(term)
     );
   }, [invoices, search]);
+
+  const renderedInvoices = visibleInvoices.slice(0, visibleCount);
+
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [search]);
 
   const displayName = contact?.fullName || session.user.email || 'Account';
   const initials = displayName
@@ -398,7 +405,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
                 <Search className="w-4 h-4 text-quill absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
               <span className="nums text-[11px] font-bold text-quill bg-mist px-3.5 py-2 rounded-full">
-                {visibleInvoices.length} invoice{visibleInvoices.length === 1 ? '' : 's'}
+                {Math.min(visibleCount, visibleInvoices.length)} of {visibleInvoices.length} invoice{visibleInvoices.length === 1 ? '' : 's'}
               </span>
             </div>
 
@@ -423,7 +430,7 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
               </div>
             ) : (
               <div className="space-y-3">
-                {visibleInvoices.map((invoice) => (
+                {renderedInvoices.map((invoice) => (
                   <article
                     key={invoice.id}
                     className="bg-mist rounded-[22px] p-5 flex flex-wrap items-center justify-between gap-5"
@@ -493,6 +500,13 @@ export default function PartnerPanel({ session, onLogout }: PartnerPanelProps) {
                     </div>
                   </article>
                 ))}
+                {visibleInvoices.length > visibleCount && (
+                  <div className="flex justify-center pt-2">
+                    <button type="button" onClick={() => setVisibleCount((previous) => previous + 50)} className="inline-flex items-center gap-2 bg-brand hover:bg-brand-mid text-white text-[11px] font-bold px-5 py-2.5 rounded-full cursor-pointer">
+                      <RefreshCw className="w-3.5 h-3.5" /> Load 50 more
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
