@@ -25,6 +25,7 @@ const money = (value: number, symbol: string) =>
 
 export default function Payment({ invoices, vendorInvoices, contacts, template, onSavePayment }: PaymentProps) {
   const [contactId, setContactId] = useState('');
+  const [contactType, setContactType] = useState<'customer' | 'vendor'>('customer');
   const [contactSearch, setContactSearch] = useState('');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -36,12 +37,12 @@ export default function Payment({ invoices, vendorInvoices, contacts, template, 
   const contactMatches = useMemo(() => {
     const query = contactSearch.trim().toLowerCase();
     if (!query || contactId) return [];
-    return contacts.filter((contact) =>
+    return contacts.filter((contact) => contact.type === contactType &&
       [contact.fullName, contact.email, contact.phone, contact.type].some((value) =>
         (value || '').toLowerCase().includes(query)
       )
     ).slice(0, 8);
-  }, [contactId, contactSearch, contacts]);
+  }, [contactId, contactSearch, contactType, contacts]);
 
   const contactInvoices = useMemo(() => {
     if (!contactId) return [];
@@ -120,7 +121,8 @@ export default function Payment({ invoices, vendorInvoices, contacts, template, 
           <div><h2 className="text-[20px] font-extrabold font-display">Record a payment</h2><p className="text-[12px] text-white/60 mt-1">Apply one payment automatically from the oldest unpaid invoice forward.</p></div>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_auto] gap-3 items-end">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-[0.85fr_1.5fr_1fr_auto] gap-3 items-end">
+          <label htmlFor="payment-contact-type" className="block"><span className="block text-[10px] font-bold uppercase tracking-wider text-white/55 mb-2">Contact type</span><select id="payment-contact-type" value={contactType} onChange={(event) => { setContactType(event.target.value as 'customer' | 'vendor'); setContactId(''); setContactSearch(''); setMessage(''); setError(''); }} className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-[12px] font-semibold text-white outline-none focus:border-brand-soft"><option value="customer" className="text-ink">Customer</option><option value="vendor" className="text-ink">Vendor</option></select></label>
           <div className="relative">
             <label htmlFor="payment-contact" className="block text-[10px] font-bold uppercase tracking-wider text-white/55 mb-2">Vendor or customer</label>
             <input id="payment-contact" type="text" value={contactSearch} onChange={(event) => { setContactSearch(event.target.value); setContactId(''); setMessage(''); setError(''); }} placeholder="Search contact name" autoComplete="off" className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-[12px] font-semibold text-white placeholder:text-white/30 outline-none focus:border-brand-soft" />
