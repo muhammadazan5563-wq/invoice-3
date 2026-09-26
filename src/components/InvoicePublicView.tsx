@@ -267,14 +267,32 @@ export default function InvoicePublicView() {
                   </p>
                 </div>
 
-                {invoice.notes && (
-                  <div className="bg-mist rounded-[18px] px-5 py-5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-2">
-                      Payment information
-                    </span>
-                    <p className="text-[11px] text-ink leading-relaxed font-medium whitespace-pre-line">
-                      {invoice.notes}
-                    </p>
+                {(invoice.notes || (invoice.expenseTotal || 0) > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.45fr)_minmax(220px,0.8fr)] gap-4 items-stretch">
+                    {invoice.notes && (
+                      <div className="bg-mist rounded-[18px] px-5 py-5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-2">
+                          Payment information
+                        </span>
+                        <p className="text-[11px] text-ink leading-relaxed font-medium whitespace-pre-line">
+                          {invoice.notes}
+                        </p>
+                      </div>
+                    )}
+
+                    {(invoice.expenseTotal || 0) > 0 && (
+                      <div className="bg-mist rounded-[18px] px-5 py-5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-3">
+                          Expense details
+                        </span>
+                        <div className="space-y-2.5 text-[11px]">
+                          <div className="flex justify-between gap-3"><span className="text-quill">Baraf</span><span className="nums font-bold text-ink">{currencySymbol}{money(invoice.expenses?.baraf || 0)}</span></div>
+                          <div className="flex justify-between gap-3"><span className="text-quill">Rickshaw Rent</span><span className="nums font-bold text-ink">{currencySymbol}{money(invoice.expenses?.rickshawRent || 0)}</span></div>
+                          <div className="flex justify-between gap-3"><span className="text-quill">Worker Expense</span><span className="nums font-bold text-ink">{currencySymbol}{money(invoice.expenses?.workerExpense || 0)}</span></div>
+                          <div className="flex justify-between gap-3 border-t border-hairline pt-2.5"><span className="font-bold text-quill">Total expenses</span><span className="nums font-extrabold text-ink">{currencySymbol}{money(invoice.expenseTotal || 0)}</span></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -287,7 +305,6 @@ export default function InvoicePublicView() {
                     </span>
                   </div>
                   {!!invoice.taxAmount && <div className="flex justify-between items-center text-[12px] font-semibold text-quill"><span>Tax {invoice.taxRate ? `(${invoice.taxRate}%)` : ''}</span><span className="nums">{currencySymbol}{money(invoice.taxAmount)}</span></div>}
-                  {!!invoice.expenseTotal && <div className="flex justify-between items-center text-[12px] font-semibold text-quill"><span>Expenses</span><span className="nums">{currencySymbol}{money(invoice.expenseTotal)}</span></div>}
 
                   <div className="flex justify-between items-start pt-3 border-t border-hairline">
                     <span className="text-[12px] font-semibold text-quill">Amount paid</span>
