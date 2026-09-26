@@ -635,9 +635,23 @@ export default function InvoiceList({ invoices, onEdit, onDelete, onMarkAsPaid, 
                     </span>
                     <p className="text-[11px] text-ink font-semibold whitespace-pre-line leading-relaxed">
                       {template?.paymentDetails ||
-                        'Beneficiary: Bank of America\nSwift Sort\nAccount No.: 324 6654 7766 9992'}
+                      'Beneficiary: Bank of America\nSwift Sort\nAccount No.: 324 6654 7766 9992'}
                     </p>
                   </div>
+
+                  {selectedInvoice.invoiceType !== 'vendor' && (selectedInvoice.expenseTotal || 0) > 0 && (
+                    <div className="bg-mist p-4 rounded-[16px]">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-quill-soft block mb-2">
+                        Expense details
+                      </span>
+                      <div className="space-y-2 text-[11px]">
+                        <div className="flex justify-between gap-3"><span className="text-quill">Baraf</span><span className="nums font-bold text-ink">{currencySymbol}{money(selectedInvoice.expenses?.baraf || 0)}</span></div>
+                        <div className="flex justify-between gap-3"><span className="text-quill">Rickshaw Rent</span><span className="nums font-bold text-ink">{currencySymbol}{money(selectedInvoice.expenses?.rickshawRent || 0)}</span></div>
+                        <div className="flex justify-between gap-3"><span className="text-quill">Worker Expense</span><span className="nums font-bold text-ink">{currencySymbol}{money(selectedInvoice.expenses?.workerExpense || 0)}</span></div>
+                        <div className="flex justify-between gap-3 border-t border-hairline pt-2"><span className="font-bold text-quill">Total expenses</span><span className="nums font-extrabold text-ink">{currencySymbol}{money(selectedInvoice.expenseTotal || 0)}</span></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3.5">
@@ -647,6 +661,20 @@ export default function InvoiceList({ invoices, onEdit, onDelete, onMarkAsPaid, 
                       {currencySymbol}{money(selectedInvoice.totalAmount)}
                     </span>
                   </div>
+
+                  {!!selectedInvoice.taxAmount && (
+                    <div className="flex justify-between items-center text-[12px] font-semibold text-quill">
+                      <span>Tax {selectedInvoice.taxRate ? `(${selectedInvoice.taxRate}%)` : ''}</span>
+                      <span className="nums">{currencySymbol}{money(selectedInvoice.taxAmount)}</span>
+                    </div>
+                  )}
+
+                  {selectedInvoice.invoiceType !== 'vendor' && !!selectedInvoice.expenseTotal && (
+                    <div className="flex justify-between items-center text-[12px] font-semibold text-quill">
+                      <span>Expenses</span>
+                      <span className="nums">{currencySymbol}{money(selectedInvoice.expenseTotal)}</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between items-start pt-3 border-t border-hairline">
                     <span className="text-[12px] font-semibold text-quill">Amount paid</span>
