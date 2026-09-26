@@ -18,6 +18,12 @@ export interface PaymentRecord {
   contactPhone?: string;
 }
 
+export interface InvoiceExpenses {
+  baraf: number;
+  rickshawRent: number;
+  workerExpense: number;
+}
+
 export interface Invoice {
   rowIndex: number;      // 1-indexed row number in the spreadsheet
   id: string;            // Invoice No / ID
@@ -30,6 +36,10 @@ export interface Invoice {
   /** Legacy spreadsheet-only field; never sent to Supabase invoice tables. */
   hotelName?: string;
   totalAmount: number;   // Total Amount, e.g., 1600.00
+  taxRate?: number;      // Contact tax rate applied to the gross amount
+  taxAmount?: number;
+  expenses?: InvoiceExpenses;
+  expenseTotal?: number;
   amountPaid: number;    // Amount Paid, e.g., 600.00
   paymentDate: string;   // Payment Date, e.g., '2026-07-18'
   balance: number;       // BALANCE (Total Amount - Amount Paid), e.g., 1000.00
