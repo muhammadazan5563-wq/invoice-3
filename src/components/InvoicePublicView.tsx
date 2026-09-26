@@ -33,6 +33,10 @@ interface InvoiceRecord {
   customerName: string;
   customerEmail: string;
   totalAmount: number;
+  taxRate?: number;
+  taxAmount?: number;
+  expenses?: { baraf: number; rickshawRent: number; workerExpense: number };
+  expenseTotal?: number;
   amountPaid: number;
   paymentDate: string;
   balance: number;
@@ -282,6 +286,8 @@ export default function InvoicePublicView() {
                       {currencySymbol}{money(invoice.totalAmount)}
                     </span>
                   </div>
+                  {!!invoice.taxAmount && <div className="flex justify-between items-center text-[12px] font-semibold text-quill"><span>Tax {invoice.taxRate ? `(${invoice.taxRate}%)` : ''}</span><span className="nums">{currencySymbol}{money(invoice.taxAmount)}</span></div>}
+                  {!!invoice.expenseTotal && <div className="flex justify-between items-center text-[12px] font-semibold text-quill"><span>Expenses</span><span className="nums">{currencySymbol}{money(invoice.expenseTotal)}</span></div>}
 
                   <div className="flex justify-between items-start pt-3 border-t border-hairline">
                     <span className="text-[12px] font-semibold text-quill">Amount paid</span>
