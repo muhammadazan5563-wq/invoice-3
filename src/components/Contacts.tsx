@@ -365,6 +365,21 @@ export default function Contacts() {
               />
             </div>
 
+            <div>
+              <label className={labelClass} htmlFor="contact-tax-rate">Tax rate (%)</label>
+              <input
+                id="contact-tax-rate"
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.taxRate || ''}
+                disabled={saving}
+                onChange={(event) => setDraft({ ...draft, taxRate: Math.max(0, parseFloat(event.target.value) || 0) })}
+                placeholder="0.00"
+                className={`${fieldClass} nums`}
+              />
+            </div>
+
             {isVendor ? (
               <>
                 <div>
@@ -619,6 +634,7 @@ export default function Contacts() {
                           location: contact.location,
                           address: contact.address,
                           area: contact.area,
+                          taxRate: contact.taxRate,
                         });
                         setFiles({ cnicFront: null, cnicBack: null, cheque: null });
                         setFormError('');
