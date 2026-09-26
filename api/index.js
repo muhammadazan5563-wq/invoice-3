@@ -461,6 +461,7 @@ export default async function handler(req, res) {
 
       if (!data) return sendCompressedJson(req, res, 404, { error: "Invoice not found", searched: rawId }, "public, max-age=15, s-maxage=60, stale-while-revalidate=300");
 
+      const storedExpenses = data.expenses && typeof data.expenses === "object" ? data.expenses : {};
       const invoice = {
         id: data.id,
         date: data.date,
@@ -470,7 +471,11 @@ export default async function handler(req, res) {
         totalAmount: Number(data.total_amount ?? data.total ?? data.gross_amount ?? 0),
         taxRate: Number(data.tax_rate || 0),
         taxAmount: Number(data.tax_amount || 0),
-        expenses: { baraf: Number(data.baraf || 0), rickshawRent: Number(data.rickshaw_rent || 0), workerExpense: Number(data.worker_expense || 0) },
+        expenses: {
+          baraf: Number(data.baraf ?? storedExpenses.baraf ?? 0),
+          rickshawRent: Number(data.rickshaw_rent ?? storedExpenses.rickshawRent ?? 0),
+          workerExpense: Number(data.worker_expense ?? storedExpenses.workerExpense ?? 0),
+        },
         expenseTotal: Number(data.expense_total || 0),
         amountPaid: Number(data.amount_paid ?? data.paid ?? data.amountPaid ?? 0),
         paymentDate: data.payment_date || data.paid_date || "",
