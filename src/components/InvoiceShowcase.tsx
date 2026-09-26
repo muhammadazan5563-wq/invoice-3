@@ -372,6 +372,20 @@ export default function InvoiceShowcase({
                   </span>
                 </div>
                 <div>
+                  <span className="block text-[10px] font-semibold text-white/55">Tax</span>
+                  <span className="nums block text-[15px] font-extrabold text-white mt-1">
+                    {currencySymbol}{money(detail.taxAmount || 0)}
+                  </span>
+                </div>
+                {detail.invoiceType !== 'vendor' && (
+                  <div>
+                    <span className="block text-[10px] font-semibold text-white/55">Expenses</span>
+                    <span className="nums block text-[15px] font-extrabold text-white mt-1">
+                      {currencySymbol}{money(detail.expenseTotal || 0)}
+                    </span>
+                  </div>
+                )}
+                <div>
                   <span className="block text-[10px] font-semibold text-white/55">Paid</span>
                   <span className="nums block text-[15px] font-extrabold text-white mt-1">
                     {currencySymbol}{money(detail.amountPaid)}
