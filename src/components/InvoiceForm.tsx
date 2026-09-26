@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Invoice, BookingItem, PaymentRecord } from '../types';
+import { Invoice, BookingItem, PaymentRecord, InvoiceExpenses } from '../types';
 import { Contact } from '../lib/contacts';
 import { InvoiceTemplate, getCurrencySymbol } from '../lib/settings';
 import { getTodayInTimezone } from '../lib/timezone';
@@ -38,6 +38,8 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [taxRate, setTaxRate] = useState(0);
+  const [expenses, setExpenses] = useState<InvoiceExpenses>({ baraf: 0, rickshawRent: 0, workerExpense: 0 });
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [paymentDate, setPaymentDate] = useState('');
   const [status, setStatus] = useState<FormStatus>('Pending');
@@ -71,6 +73,7 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
     setCustomerName(contact.fullName);
     setCustomerEmail(contact.email);
     setCustomerPhone(contact.phone);
+    setTaxRate(Math.max(0, Number(contact.taxRate || 0)));
   };
 
   useEffect(() => {
@@ -83,6 +86,8 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
       setContactSearch(invoice.customerName);
       setCustomerEmail(invoice.customerEmail);
       setCustomerPhone(invoice.customerPhone || '');
+      setTaxRate(Math.max(0, Number(invoice.taxRate || 0)));
+      setExpenses(invoice.expenses || { baraf: 0, rickshawRent: 0, workerExpense: 0 });
       setAmountPaid(invoice.amountPaid);
       setPaymentDate(invoice.paymentDate || invoice.date);
       setStatus(invoice.status);
@@ -112,6 +117,8 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
       setSelectedContactId('');
       setCustomerEmail('');
       setCustomerPhone('');
+      setTaxRate(0);
+      setExpenses({ baraf: 0, rickshawRent: 0, workerExpense: 0 });
       setAmountPaid(0);
       setPaymentDate(today);
       setStatus('Due');
@@ -168,13 +175,13 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
   }, [payments]);
 
   useEffect(() => {
-    const currentBalance = subtotal - amountPaid;
+    const currentBalance = subtotal + subtotal * taxRate / 100 + (invoiceType === 'customer' ? Object.values(expenses).reduce((sum, value) => sum + value, 0) : 0) - amountPaid;
     if (currentBalance <= 0) {
       setStatus('Paid');
     } else if (status === 'Paid') {
       setStatus('Due');
     }
-  }, [subtotal, amountPaid, status]);
+  }, [subtotal, taxRate, expenses, invoiceType, amountPaid, status]);
 
   const handleAddPayment = () => {
     const today = getTodayInTimezone(template?.timezone || 'UTC');
@@ -279,10 +286,14 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim(),
         customerPhone: customerPhone.trim(),
-        totalAmount: subtotal,
+        totalAmount,
+        taxRate,
+        taxAmount,
+        expenses: invoiceType === 'customer' ? expenses : { baraf: 0, rickshawRent: 0, workerExpense: 0 },
+        expenseTotal,
         amountPaid,
         paymentDate: paymentDate || date,
-        balance: balanceValue,
+        balance: totalAmount - amountPaid,
         status,
         notes: notes.trim(),
         items: items.map((item) => ({
@@ -313,7 +324,10 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
     setPayments([{ amount: 600.0, date: '2026-07-18' }]);
   };
 
-  const balance = subtotal - amountPaid;
+  const expenseTotal = invoiceType === 'customer' ? Object.values(expenses).reduce((sum, value) => sum + value, 0) : 0;
+  const taxAmount = subtotal * taxRate / 100;
+  const totalAmount = subtotal + taxAmount + expenseTotal;
+  const balance = totalAmount - amountPaid;
 
   const statusTone = (s: FormStatus, active: boolean) => {
     if (!active) return 'bg-mist text-quill hover:md:bg-mist-2';
@@ -403,7 +417,7 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
           </div>
           <div><label htmlFor="inv-email" className={labelClass}>{invoiceType === 'vendor' ? 'Vendor email' : 'Customer email'}</label><input id="inv-email" type="email" value={customerEmail} readOnly={!!selectedContactId} onChange={(e) => setCustomerEmail(e.target.value)} className={fieldClass} placeholder="Email" /></div>
           <div><label htmlFor="inv-phone" className={labelClass}>Phone</label><input id="inv-phone" value={customerPhone} readOnly={!!selectedContactId} onChange={(e) => setCustomerPhone(e.target.value)} className={fieldClass} placeholder="Phone" /></div>
-          <div><label htmlFor="inv-type" className={labelClass}>Invoice type</label><select id="inv-type" disabled={!!invoice} value={invoiceType} onChange={(e) => { setInvoiceType(e.target.value as 'customer' | 'vendor'); setContactSearch(''); setSelectedContactId(''); setCustomerName(''); setCustomerEmail(''); setCustomerPhone(''); }} className={fieldClass}><option value="customer">Customer sale</option><option value="vendor">Vendor purchase</option></select></div>
+          <div><label htmlFor="inv-type" className={labelClass}>Invoice type</label><select id="inv-type" disabled={!!invoice} value={invoiceType} onChange={(e) => { const nextType = e.target.value as 'customer' | 'vendor'; setInvoiceType(nextType); setContactSearch(''); setSelectedContactId(''); setCustomerName(''); setCustomerEmail(''); setCustomerPhone(''); setTaxRate(0); if (nextType === 'vendor') setExpenses({ baraf: 0, rickshawRent: 0, workerExpense: 0 }); }} className={fieldClass}><option value="customer">Customer sale</option><option value="vendor">Vendor purchase</option></select></div>
         </div>
 
         {/* Booking lines */}
@@ -533,6 +547,30 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
                 placeholder={defaultNotes}
               />
             </div>
+
+            {invoiceType === 'customer' && (
+              <div className="bg-mist rounded-[20px] p-5 space-y-4">
+                <div>
+                  <h4 className="text-[13px] font-extrabold text-ink font-display">Expenses</h4>
+                  <p className="text-[11px] text-quill-soft font-medium mt-1">Customer invoice expenses are added to the receipt total.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {([
+                    ['baraf', 'Baraf'],
+                    ['rickshawRent', 'Rickshaw Rent'],
+                    ['workerExpense', 'Worker Expense'],
+                  ] as const).map(([key, label]) => (
+                    <div key={key}>
+                      <label htmlFor={`expense-${key}`} className={labelClass}>{label}</label>
+                      <input id={`expense-${key}`} type="number" min="0" step="0.01" value={expenses[key] || ''} onChange={(event) => setExpenses({ ...expenses, [key]: Math.max(0, parseFloat(event.target.value) || 0) })} className={`${fieldClass} nums`} placeholder="0.00" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between border-t border-hairline pt-3 text-[12px] font-bold text-quill">
+                  <span>Total expenses</span><span className="nums text-ink">{currencySymbol}{money(expenseTotal)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Totals card */}
@@ -550,10 +588,18 @@ export default function InvoiceForm({ invoice, contacts, onSave, onCancel, sugge
                 step="0.01"
                 value={subtotal || ''}
                 onChange={(e) => setSubtotal(Math.max(0, parseFloat(e.target.value) || 0))}
-                className="nums w-28 bg-shell rounded-xl px-3 py-2 text-right text-[12px] font-bold text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
+                className="nums appearance-none w-28 bg-shell rounded-xl px-3 py-2 text-right text-[12px] font-bold text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
                 placeholder="0.00"
               />
             </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="inv-tax-rate" className="text-[11px] font-bold text-quill">Tax rate (%)</label>
+              <input id="inv-tax-rate" type="number" min="0" step="0.01" value={taxRate || ''} onChange={(e) => setTaxRate(Math.max(0, parseFloat(e.target.value) || 0))} className="nums appearance-none w-28 bg-shell rounded-xl px-3 py-2 text-right text-[12px] font-bold text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand" placeholder="0.00" />
+            </div>
+            <div className="flex justify-between items-center text-[11px] text-quill"><span>Tax amount</span><span className="nums font-bold text-ink">{currencySymbol}{money(taxAmount)}</span></div>
+            {invoiceType === 'customer' && <div className="flex justify-between items-center text-[11px] text-quill"><span>Expenses</span><span className="nums font-bold text-ink">{currencySymbol}{money(expenseTotal)}</span></div>}
+            <div className="flex justify-between items-center pt-3 border-t border-hairline"><span className="text-[11px] font-bold text-quill">Total amount</span><span className="nums text-[15px] font-extrabold text-ink font-display">{currencySymbol}{money(totalAmount)}</span></div>
 
             <div className="pt-3 border-t border-hairline space-y-3">
               <div className="flex justify-between items-center">
