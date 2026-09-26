@@ -467,6 +467,7 @@ export default async function handler(req, res) {
         date: data.date,
         customerName: data.customer_name || data.customer || data.buyer_name || data.client_name || "",
         customerEmail: data.customer_email || data.email || "",
+        invoiceType: data.invoice_type || "customer",
         fisheryName: data.fishery_name || data.fish_name || data.supplier_name || "",
         totalAmount: Number(data.total_amount ?? data.total ?? data.gross_amount ?? 0),
         taxRate: Number(data.tax_rate || 0),
