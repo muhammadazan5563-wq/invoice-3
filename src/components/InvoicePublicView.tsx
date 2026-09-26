@@ -32,6 +32,7 @@ interface InvoiceRecord {
   date: string;
   customerName: string;
   customerEmail: string;
+  invoiceType?: 'customer' | 'vendor';
   totalAmount: number;
   taxRate?: number;
   taxAmount?: number;
@@ -181,7 +182,7 @@ export default function InvoicePublicView() {
 
         {/* ===== INVOICE CARD (from Supabase) ===== */}
         {invoice && (
-          <div className="bg-shell border-t-[6px] border-ink rounded-[30px] overflow-hidden shadow-[0_40px_90px_-60px_rgba(19,17,38,0.25)] mb-6 print:shadow-none print:rounded-none">
+          <div className="track-invoice-print bg-shell border-t-[6px] border-ink rounded-[30px] overflow-hidden shadow-[0_40px_90px_-60px_rgba(19,17,38,0.25)] mb-6 print:shadow-none print:rounded-none">
             {/* Branding Header */}
             <div className="p-7 sm:p-8 space-y-7">
               {/* Top branding */}
@@ -233,7 +234,7 @@ export default function InvoicePublicView() {
                         <th className="py-3.5 px-4">Fish species</th>
                         <th className="py-3.5 px-4">Description</th>
                         <th className="py-3.5 px-4 text-center">Quantity (kg)</th>
-                        <th className="py-3.5 px-4 text-right">Rate / kg</th>
+                        {invoice.invoiceType !== 'vendor' && <th className="py-3.5 px-4 text-right">Rate / kg</th>}
                         <th className="py-3.5 px-4 text-right">Amount</th>
                       </tr>
                     </thead>
@@ -243,9 +244,7 @@ export default function InvoicePublicView() {
                           <td className="py-3.5 px-4 font-bold">{item.fishSpecies || item.roomType || '—'}</td>
                           <td className="py-3.5 px-4 text-quill">{item.description || '—'}</td>
                           <td className="nums py-3.5 px-4 text-center font-semibold">{item.quantity}</td>
-                          <td className="nums py-3.5 px-4 text-right font-semibold">
-                            {currencySymbol}{money(item.price)}
-                          </td>
+                          {invoice.invoiceType !== 'vendor' && <td className="nums py-3.5 px-4 text-right font-semibold">{currencySymbol}{money(item.price)}</td>}
                           <td className="nums py-3.5 px-4 text-right font-bold">
                             {currencySymbol}{money(item.total)}
                           </td>
