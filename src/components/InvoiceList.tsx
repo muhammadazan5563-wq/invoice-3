@@ -580,15 +580,15 @@ export default function InvoiceList({ invoices, onEdit, onDelete, onMarkAsPaid, 
                     <tr className="text-quill font-bold text-[10px] uppercase tracking-wider">
                       <th className="py-3.5 px-4">Fish species</th>
                       <th className="py-3.5 px-4">Description</th>
-                      <th className="py-3.5 px-4 text-center">Quantity kg</th>
-                      <th className="py-3.5 px-4 text-right">Rate per kg</th>
-                      <th className="py-3.5 px-4 text-right">Amount</th>
+                        <th className="py-3.5 px-4 text-center">Quantity kg</th>
+                        {selectedInvoice.invoiceType !== 'vendor' && <th className="py-3.5 px-4 text-right">Rate per kg</th>}
+                        <th className="py-3.5 px-4 text-right">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="text-ink text-[12px]">
                     {selectedInvoice.items.length === 0 ? (
                       <tr className="bg-shell border-t-4 border-mist">
-                        <td colSpan={6} className="py-8 px-4 text-center">
+                          <td colSpan={selectedInvoice.invoiceType === 'vendor' ? 4 : 5} className="py-8 px-4 text-center">
                           <p className="text-[12px] font-bold text-ink">No line items yet</p>
                           <p className="text-[11px] text-quill-soft mt-1 font-medium">
                             Add fish species and quantities to build this invoice.
@@ -603,9 +603,7 @@ export default function InvoiceList({ invoices, onEdit, onDelete, onMarkAsPaid, 
                         {item.description || '—'}
                       </td>
                       <td className="nums py-3.5 px-4 text-center font-semibold">{item.quantity}</td>
-                          <td className="nums py-3.5 px-4 text-right font-semibold">
-                            {currencySymbol}{money(item.price)}
-                          </td>
+                          {selectedInvoice.invoiceType !== 'vendor' && <td className="nums py-3.5 px-4 text-right font-semibold">{currencySymbol}{money(item.price)}</td>}
                           <td className="nums py-3.5 px-4 text-right font-bold">
                             {currencySymbol}{money(item.quantity * item.price)}
                           </td>
