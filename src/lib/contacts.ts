@@ -31,6 +31,7 @@ export interface Contact {
   location: string;
   address: string;
   area: string;
+  taxRate: number;
   cnicFrontUrl: string;
   cnicBackUrl: string;
   chequeUrl: string;
@@ -49,6 +50,7 @@ export interface ContactDraft {
   location?: string;
   address?: string;
   area?: string;
+  taxRate?: number;
 }
 
 /** Documents uploaded for a customer contact. */
@@ -116,6 +118,7 @@ function toContact(id: string, data: Record<string, any>): Contact {
     location: data.location || '',
     address: data.address || '',
     area: data.area || '',
+    taxRate: Number(data.taxRate || 0),
     cnicFrontUrl: data.cnicFrontUrl || '',
     cnicBackUrl: data.cnicBackUrl || '',
     chequeUrl: data.chequeUrl || '',
@@ -279,6 +282,7 @@ export async function createContact(
     location: (draft.location || '').trim(),
     address: (draft.address || '').trim(),
     area: (draft.area || '').trim(),
+    taxRate: Math.max(0, Number(draft.taxRate || 0)),
     cnicFrontUrl,
     cnicBackUrl,
     chequeUrl,
@@ -317,6 +321,7 @@ export async function updateContact(
     location: (draft.location || '').trim(),
     address: (draft.address || '').trim(),
     area: (draft.area || '').trim(),
+    taxRate: Math.max(0, Number(draft.taxRate || 0)),
     cnicFrontUrl,
     cnicBackUrl,
     chequeUrl,
